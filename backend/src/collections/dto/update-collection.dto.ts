@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, MinLength, MaxLength, IsUUID } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateCollectionDto {
@@ -31,4 +31,12 @@ export class UpdateCollectionDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'ID of the category this collection belongs to',
+    example: '3a9f4f88-b203-4cd9-9e00-031e40e83185',
+  })
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
 }

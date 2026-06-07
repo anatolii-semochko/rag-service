@@ -16,8 +16,11 @@ export class Document {
   @Column({ type: 'varchar', length: 255 })
   originalFilename: string;
 
-  @Column({ type: 'varchar', length: 500 })
-  filePath: string;
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  filePath: string; // For file system storage (optional)
+
+  @Column({ type: 'bytea', nullable: true })
+  fileContent: Buffer; // For database storage
 
   @Column({ type: 'varchar', length: 100 })
   mimeType: string;

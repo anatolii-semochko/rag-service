@@ -107,4 +107,24 @@ export class CollectionsController {
   async remove(@Param('id') id: string): Promise<void> {
     return this.collectionsService.remove(id);
   }
+
+  @Get(':id/documents')
+  @ApiOperation({
+    summary: 'Get all documents in a collection',
+    description: 'Retrieves all documents that belong to a specific collection',
+  })
+  @ApiParam({ name: 'id', type: 'string', description: 'Collection ID' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page' })
+  @ApiResponse({
+    status: 200,
+    description: 'Documents retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Collection not found' })
+  async getDocuments(
+    @Param('id') id: string,
+    @Query() pagination: PaginationDto,
+  ) {
+    return this.collectionsService.getDocuments(id, pagination);
+  }
 }

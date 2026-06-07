@@ -1,5 +1,6 @@
 import { IsString, IsUUID, IsOptional, IsArray, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 
 export class UploadDocumentDto {
   @ApiProperty({
@@ -14,6 +15,16 @@ export class UploadDocumentDto {
     example: { folder: '/finance/reports', department: 'accounting' },
   })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return {};
+      }
+    }
+    return value || {};
+  })
   metadata?: Record<string, any>;
 
   @ApiPropertyOptional({
@@ -26,5 +37,16 @@ export class UploadDocumentDto {
   @IsArray()
   @IsString({ each: true })
   @MaxLength(50, { each: true })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return Array.isArray(value) ? value : [];
+  })
   tags?: string[];
 }

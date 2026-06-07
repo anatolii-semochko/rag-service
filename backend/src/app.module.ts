@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 
 import { DatabaseModule } from './database/database.module';
 import { CommonModule } from './common/common.module';
+import { CategoriesModule } from './categories/categories.module';
 import { CollectionsModule } from './collections/collections.module';
 import { DocumentsModule } from './documents/documents.module';
 import { ChatModule } from './chat/chat.module';
@@ -41,6 +42,7 @@ import { SearchModule } from './search/search.module';
 
     DatabaseModule,
     CommonModule,
+    CategoriesModule,
     CollectionsModule,
     DocumentsModule,
     ChatModule,

@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { plainToClass } from 'class-transformer';
 import { Collection } from '../entities/collection.entity';
+import { Category } from '../../entities/category.entity';
 import { CreateCollectionDto } from '../dto/create-collection.dto';
 import { UpdateCollectionDto } from '../dto/update-collection.dto';
 import { CollectionResponseDto } from '../dto/collection-response.dto';
@@ -12,107 +14,205 @@ export class CollectionsService {
   constructor(
     @InjectRepository(Collection)
     private collectionsRepository: Repository<Collection>,
+    @InjectRepository(Category)
+    private categoryRepository: Repository<Category>,
   ) {}
 
   async create(createCollectionDto: CreateCollectionDto): Promise<CollectionResponseDto> {
-    // Mock implementation - return test data
-    const mockCollection: CollectionResponseDto = {
-      id: '123e4567-e89b-12d3-a456-426614174000',
-      name: createCollectionDto.name,
-      description: createCollectionDto.description || null,
-      documentsCount: 0,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    // Check if category exists
+    const category = await this.categoryRepository.findOne({
+      where: { id: createCollectionDto.categoryId },
+    });
 
-    return mockCollection;
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    // Check if collection with same name already exists in this category
+    const existingCollection = await this.collectionsRepository.findOne({
+      where: {
+        name: createCollectionDto.name,
+        categoryId: createCollectionDto.categoryId
+      },
+    });
+
+    if (existingCollection) {
+      throw new ConflictException('Collection with this name already exists in this category');
+    }
+
+    const collection = this.collectionsRepository.create({
+      ...createCollectionDto,
+      isActive: true,
+    });
+    const savedCollection = await this.collectionsRepository.save(collection);
+
+    return plainToClass(CollectionResponseDto, {
+      ...savedCollection,
+      documentsCount: 0,
+    });
   }
 
   async findAll(pagination: PaginationDto): Promise<{
     data: CollectionResponseDto[];
     pagination: { page: number; limit: number; total: number; pages: number };
   }> {
-    // Mock implementation - return test data
-    const mockCollections: CollectionResponseDto[] = [
-      {
-        id: '123e4567-e89b-12d3-a456-426614174000',
-        name: 'Financial Reports 2024',
-        description: 'Annual financial reports and analysis',
-        documentsCount: 15,
-        isActive: true,
-        createdAt: '2024-01-15T10:00:00.000Z',
-        updatedAt: '2024-06-06T10:00:00.000Z',
-      },
-      {
-        id: '456e7890-e89b-12d3-a456-426614174001',
-        name: 'Marketing Materials',
-        description: 'Brochures, presentations, and marketing content',
-        documentsCount: 8,
-        isActive: true,
-        createdAt: '2024-02-01T14:30:00.000Z',
-        updatedAt: '2024-05-20T16:45:00.000Z',
-      },
-      {
-        id: '789e0123-e89b-12d3-a456-426614174002',
-        name: 'Technical Documentation',
-        description: null,
-        documentsCount: 23,
-        isActive: false,
-        createdAt: '2024-03-10T09:15:00.000Z',
-        updatedAt: '2024-04-05T11:20:00.000Z',
-      },
-    ];
+    const { page = 1, limit = 10 } = pagination;
 
-    const total = mockCollections.length;
-    const pages = Math.ceil(total / pagination.limit);
-    const startIndex = (pagination.page - 1) * pagination.limit;
-    const endIndex = startIndex + pagination.limit;
-    const data = mockCollections.slice(startIndex, endIndex);
+    const [collections, total] = await this.collectionsRepository.findAndCount({
+      relations: ['category', 'documents'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const data = collections.map(collection =>
+      plainToClass(CollectionResponseDto, {
+        ...collection,
+        documentsCount: collection.documents?.length || 0,
+      }),
+    );
 
     return {
       data,
       pagination: {
-        page: pagination.page,
-        limit: pagination.limit,
+        page,
+        limit,
         total,
-        pages,
+        pages: Math.ceil(total / limit),
       },
     };
   }
 
   async findOne(id: string): Promise<CollectionResponseDto> {
-    // Mock implementation - return test data
-    const mockCollection: CollectionResponseDto = {
-      id,
-      name: 'Financial Reports 2024',
-      description: 'Annual financial reports and analysis',
-      documentsCount: 15,
-      isActive: true,
-      createdAt: '2024-01-15T10:00:00.000Z',
-      updatedAt: '2024-06-06T10:00:00.000Z',
-    };
+    const collection = await this.collectionsRepository.findOne({
+      where: { id },
+      relations: ['category', 'documents'],
+    });
 
-    return mockCollection;
+    if (!collection) {
+      throw new NotFoundException('Collection not found');
+    }
+
+    return plainToClass(CollectionResponseDto, {
+      ...collection,
+      documentsCount: collection.documents?.length || 0,
+    });
   }
 
   async update(id: string, updateCollectionDto: UpdateCollectionDto): Promise<CollectionResponseDto> {
-    // Mock implementation - return updated test data
-    const mockCollection: CollectionResponseDto = {
-      id,
-      name: updateCollectionDto.name || 'Financial Reports 2024',
-      description: updateCollectionDto.description || 'Annual financial reports and analysis',
-      documentsCount: 15,
-      isActive: updateCollectionDto.isActive !== undefined ? updateCollectionDto.isActive : true,
-      createdAt: '2024-01-15T10:00:00.000Z',
-      updatedAt: new Date().toISOString(),
-    };
+    const collection = await this.findOne(id);
 
-    return mockCollection;
+    // If categoryId is being changed, verify the new category exists
+    if (updateCollectionDto.categoryId && updateCollectionDto.categoryId !== collection.categoryId) {
+      const category = await this.categoryRepository.findOne({
+        where: { id: updateCollectionDto.categoryId },
+      });
+
+      if (!category) {
+        throw new NotFoundException('Category not found');
+      }
+    }
+
+    // Check for name conflicts if name or category is being updated
+    const targetCategoryId = updateCollectionDto.categoryId || collection.categoryId;
+    const targetName = updateCollectionDto.name || collection.name;
+
+    if ((updateCollectionDto.name && updateCollectionDto.name !== collection.name) ||
+        (updateCollectionDto.categoryId && updateCollectionDto.categoryId !== collection.categoryId)) {
+      const existingCollection = await this.collectionsRepository.findOne({
+        where: {
+          name: targetName,
+          categoryId: targetCategoryId
+        },
+      });
+
+      if (existingCollection && existingCollection.id !== id) {
+        throw new ConflictException('Collection with this name already exists in this category');
+      }
+    }
+
+    await this.collectionsRepository.update(id, updateCollectionDto);
+    return this.findOne(id);
+  }
+
+  async toggleActive(id: string): Promise<CollectionResponseDto> {
+    const collection = await this.collectionsRepository.findOne({ where: { id } });
+
+    if (!collection) {
+      throw new NotFoundException('Collection not found');
+    }
+
+    collection.isActive = !collection.isActive;
+    await this.collectionsRepository.save(collection);
+
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {
-    // Mock implementation - no actual deletion
-    return;
+    const collection = await this.collectionsRepository.findOne({
+      where: { id },
+      relations: ['documents'],
+    });
+
+    if (!collection) {
+      throw new NotFoundException('Collection not found');
+    }
+
+    if (collection.documents && collection.documents.length > 0) {
+      throw new ConflictException(
+        'Cannot delete collection with existing documents. Delete documents first.',
+      );
+    }
+
+    await this.collectionsRepository.delete(id);
+  }
+
+  async getDocuments(id: string, pagination: PaginationDto) {
+    const { page = 1, limit = 10 } = pagination;
+
+    const collection = await this.collectionsRepository.findOne({ where: { id } });
+    if (!collection) {
+      throw new NotFoundException('Collection not found');
+    }
+
+    // For now, return empty array until documents are implemented
+    return {
+      data: [],
+      pagination: {
+        page,
+        limit,
+        total: 0,
+        pages: 0,
+      },
+    };
+  }
+
+  async findByCategory(categoryId: string, pagination: PaginationDto) {
+    const { page = 1, limit = 10 } = pagination;
+
+    const [collections, total] = await this.collectionsRepository.findAndCount({
+      where: { categoryId },
+      relations: ['documents'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const data = collections.map(collection =>
+      plainToClass(CollectionResponseDto, {
+        ...collection,
+        documentsCount: collection.documents?.length || 0,
+      }),
+    );
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }

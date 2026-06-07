@@ -33,6 +33,12 @@ export class CollectionResponseDto {
   isActive: boolean;
 
   @ApiProperty({
+    description: 'Category ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  categoryId: string;
+
+  @ApiProperty({
     description: 'Creation timestamp',
     example: '2024-06-06T10:00:00.000Z',
   })

@@ -1,16 +1,18 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MulterModule } from '@nestjs/platform-express';
+import * as multer from 'multer';
 import { DocumentsController } from './controllers/documents.controller';
 import { DocumentsService } from './services/documents.service';
 import { Document } from './entities/document.entity';
 import { Chunk } from './entities/chunk.entity';
+import { Collection } from '../collections/entities/collection.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Document, Chunk]),
+    TypeOrmModule.forFeature([Document, Chunk, Collection]),
     MulterModule.register({
-      dest: './uploads',
+      storage: multer.memoryStorage(),
       limits: {
         fileSize: 50 * 1024 * 1024, // 50MB
       },

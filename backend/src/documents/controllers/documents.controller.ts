@@ -118,6 +118,29 @@ export class DocumentsController {
     return this.documentsService.findOne(id);
   }
 
+  @Get(':id/content')
+  @ApiOperation({
+    summary: 'Get document content',
+    description: 'Retrieves the raw content of a document',
+  })
+  @ApiParam({ name: 'id', type: 'string', description: 'Document ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Document content retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string', description: 'Document content as text' },
+        mimeType: { type: 'string', description: 'Original file MIME type' },
+        filename: { type: 'string', description: 'Original filename' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async getContent(@Param('id') id: string): Promise<{ content: string; mimeType: string; filename: string }> {
+    return this.documentsService.getContent(id);
+  }
+
   @Patch(':id/toggle-active')
   @ApiOperation({
     summary: 'Toggle document active status',
