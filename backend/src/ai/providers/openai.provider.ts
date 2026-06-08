@@ -48,6 +48,34 @@ export class OpenAIProvider implements LLMProvider {
     }
   }
 
+  async chat(messages: Array<{role: string; content: string}>, temperature: number = 0.7): Promise<string> {
+    try {
+      const response = await fetch(`${this.baseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: messages,
+          max_tokens: 1000,
+          temperature: temperature,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.choices[0]?.message?.content || '';
+    } catch (error) {
+      console.error('Error in chat with OpenAI:', error);
+      throw error;
+    }
+  }
+
   async embeddings(text: string): Promise<number[]> {
     try {
       const response = await fetch(`${this.baseURL}/embeddings`, {
