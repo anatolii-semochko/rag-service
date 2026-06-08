@@ -131,6 +131,18 @@ class Config {
     return this.buildApiUrl('/documents/upload');
   }
 
+  getDocumentReprocessUrl(id) {
+    return this.buildApiUrl(`/documents/${id}/reprocess`);
+  }
+
+  getQueueStatusUrl(documentId) {
+    return this.buildApiUrl(`/queue/status/${documentId}`);
+  }
+
+  getQueueStatsUrl() {
+    return this.buildApiUrl('/queue/stats');
+  }
+
   // Debug method to log current configuration
   debugConfig() {
     console.log('Current API Configuration:', {

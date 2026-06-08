@@ -8,6 +8,7 @@ import { DocumentResponseDto } from '../dto/document-response.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { plainToClass } from 'class-transformer';
 import * as path from 'path';
+import { FileProcessingQueueService } from '../../queue/services/file-processing-queue.service';
 
 @Injectable()
 export class DocumentsService {
@@ -16,6 +17,7 @@ export class DocumentsService {
     private documentsRepository: Repository<Document>,
     @InjectRepository(Collection)
     private collectionsRepository: Repository<Collection>,
+    private fileProcessingQueue: FileProcessingQueueService,
   ) {}
 
   async upload(file: Express.Multer.File, uploadDto: UploadDocumentDto): Promise<DocumentResponseDto> {
@@ -53,6 +55,9 @@ export class DocumentsService {
 
     // Save to database
     const savedDocument = await this.documentsRepository.save(document);
+
+    // Add to processing queue
+    await this.addToProcessingQueue(savedDocument, file);
 
     // Return response DTO
     return plainToClass(DocumentResponseDto, {
@@ -214,6 +219,62 @@ export class DocumentsService {
     await this.documentsRepository.delete(id);
   }
 
+  async reprocessDocument(id: string): Promise<{ documentId: string; status: string; message: string }> {
+    // Знайти документ
+    const document = await this.documentsRepository.findOne({
+      where: { id },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    if (!document.fileContent) {
+      throw new BadRequestException('Document has no file content to process');
+    }
+
+    try {
+      // Скинути статус обробки
+      const updatedMetadata = {
+        ...document.metadata,
+        status: 'reprocessing',
+        reprocessedAt: new Date().toISOString(),
+      } as Record<string, any>;
+
+      await this.documentsRepository.update(id, {
+        isProcessed: false,
+        metadata: updatedMetadata,
+        updatedAt: new Date(),
+      });
+
+      // Створити фейковий Multer файл для обробки
+      const mockFile: Express.Multer.File = {
+        fieldname: 'file',
+        originalname: document.originalFilename,
+        encoding: '7bit',
+        mimetype: document.mimeType,
+        size: document.fileSize,
+        buffer: document.fileContent,
+        destination: '',
+        filename: document.filename,
+        path: '',
+        stream: null,
+      };
+
+      // Додати в чергу обробки
+      await this.addToProcessingQueue(document, mockFile);
+
+      return {
+        documentId: id,
+        status: 'queued',
+        message: 'Document has been queued for reprocessing',
+      };
+    } catch (error) {
+      console.error(`Error reprocessing document ${id}:`, error);
+      throw new BadRequestException(`Failed to reprocess document: ${error.message}`);
+    }
+  }
+
   private getFileType(filename: string): string {
     const extension = filename.split('.').pop()?.toLowerCase();
     switch (extension) {
@@ -233,6 +294,24 @@ export class DocumentsService {
         return 'image';
       default:
         return 'txt';
+    }
+  }
+
+  private async addToProcessingQueue(document: Document, file: Express.Multer.File): Promise<void> {
+    try {
+      await this.fileProcessingQueue.addJob({
+        documentId: document.id,
+        collectionId: document.collectionId,
+        filename: document.originalFilename,
+        mimeType: document.mimeType,
+        fileBuffer: file.buffer,
+      });
+
+      console.log(`Added document ${document.id} to processing queue`);
+    } catch (error) {
+      console.error(`Error adding document ${document.id} to queue:`, error);
+      // Не викидаємо помилку, щоб не перервати завантаження файлу
+      // Файл збережеться, але не буде оброблено
     }
   }
 }

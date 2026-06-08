@@ -172,6 +172,29 @@ export class DocumentsController {
     return this.documentsService.toggleActive(id, isActive);
   }
 
+  @Post(':id/reprocess')
+  @ApiOperation({
+    summary: 'Restart document analysis',
+    description: 'Restarts the analysis process for a document (chunking and embeddings)',
+  })
+  @ApiParam({ name: 'id', type: 'string', description: 'Document ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Document reprocessing started successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        documentId: { type: 'string' },
+        status: { type: 'string' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async reprocessDocument(@Param('id') id: string): Promise<{ documentId: string; status: string; message: string }> {
+    return this.documentsService.reprocessDocument(id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({

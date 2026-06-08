@@ -864,6 +864,7 @@ class RAGApp {
           </td>
           <td class="actions-cell">
             <button class="btn-icon preview-btn" onclick="app.previewFile('${file.id}')" title="Preview Content">👁️</button>
+            <button class="btn-icon analyze-btn" onclick="app.reprocessFile('${file.id}')" title="Restart Analysis">🔄</button>
             <button class="btn-icon delete-btn" onclick="app.deleteFileWithConfirm('${file.id}', '${file.originalFilename || file.filename || file.title}')" title="Delete File">🗑️</button>
           </td>
         </tr>
@@ -875,14 +876,49 @@ class RAGApp {
   }
 
   getProcessingStatus(item) {
-    // Mock processing status - to be replaced with real data
-    const statuses = [
-      { class: 'status-pending', text: 'Pending' },
-      { class: 'status-processing', text: 'Processing' },
-      { class: 'status-completed', text: 'Completed' },
-      { class: 'status-error', text: 'Error' }
-    ];
-    return statuses[Math.floor(Math.random() * statuses.length)];
+    // For files (documents), check actual processing status
+    if (item.isProcessed !== undefined) {
+      // Check metadata for processing status
+      if (item.metadata && item.metadata.status) {
+        switch (item.metadata.status) {
+          case 'reprocessing':
+            return { class: 'status-processing', text: 'Reprocessing' };
+          case 'failed':
+            return { class: 'status-error', text: 'Failed' };
+          case 'completed':
+            return { class: 'status-completed', text: 'Completed' };
+          default:
+            return { class: 'status-processing', text: 'Processing' };
+        }
+      }
+
+      // Fallback to isProcessed flag
+      if (item.isProcessed === true) {
+        return { class: 'status-completed', text: 'Completed' };
+      } else if (item.isProcessed === false) {
+        return { class: 'status-processing', text: 'Processing' };
+      }
+    }
+
+    // For collections and categories, check if all items are processed
+    if (item.collections !== undefined) {
+      // Category - check collections
+      const totalCollections = item.collections ? item.collections.length : 0;
+      if (totalCollections === 0) {
+        return { class: 'status-pending', text: 'Empty' };
+      }
+      return { class: 'status-completed', text: 'Active' };
+    } else if (item.documents !== undefined || item.documentsCount !== undefined) {
+      // Collection - check documents count
+      const totalDocs = item.documentsCount || (item.documents ? item.documents.length : 0);
+      if (totalDocs === 0) {
+        return { class: 'status-pending', text: 'Empty' };
+      }
+      return { class: 'status-completed', text: 'Active' };
+    }
+
+    // Default status
+    return { class: 'status-pending', text: 'Pending' };
   }
 
   getFileIcon(type) {
@@ -1777,6 +1813,68 @@ class RAGApp {
     } catch (error) {
       console.error('Error deleting file:', error);
       alert('Error deleting file. Please check your connection.');
+    }
+  }
+
+  async reprocessFile(fileId) {
+    if (!confirm('Are you sure you want to restart the analysis for this file? This will re-process the file and create new embeddings.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(config.getDocumentReprocessUrl(fileId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`File ${fileId} reprocessing started:`, result);
+
+        // Показуємо повідомлення користувачу
+        alert(`Analysis started for file! Status: ${result.status}`);
+
+        // Оновлюємо таблицю файлів, щоб показати статус "processing"
+        await this.fetchCategories();
+        this.updateDocumentsTable();
+
+        // Опціонально: почати перевіряти статус обробки
+        this.checkProcessingStatus(fileId);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to reprocess file:', errorData);
+        alert(`Failed to start analysis: ${errorData.message || 'Please try again.'}`);
+      }
+    } catch (error) {
+      console.error('Error reprocessing file:', error);
+      alert('Error starting analysis. Please try again.');
+    }
+  }
+
+  async checkProcessingStatus(documentId) {
+    try {
+      const response = await fetch(config.getQueueStatusUrl(documentId));
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Processing status for ${documentId}:`, result.status);
+
+        if (result.status === 'processing') {
+          // Перевіряємо знову через 5 секунд
+          setTimeout(() => this.checkProcessingStatus(documentId), 5000);
+        } else if (result.status === 'completed') {
+          console.log(`Processing completed for document ${documentId}`);
+          // Оновлюємо дані
+          await this.fetchCategories();
+          this.updateDocumentsTable();
+        } else if (result.status === 'failed') {
+          console.error(`Processing failed for document ${documentId}`);
+          alert('Analysis failed. Please try again or check the file format.');
+          await this.fetchCategories();
+          this.updateDocumentsTable();
+        }
+      }
+    } catch (error) {
+      console.error('Error checking processing status:', error);
     }
   }
 

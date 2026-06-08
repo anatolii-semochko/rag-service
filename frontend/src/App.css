@@ -1062,6 +1062,21 @@ body {
   background: #d6d8db;
 }
 
+.actions-cell .analyze-btn {
+  background: #e1f5fe;
+  color: #0277bd;
+}
+
+.actions-cell .analyze-btn:hover {
+  background: #b3e5fc;
+}
+
+.actions-cell .analyze-btn:disabled {
+  background: #f0f0f0;
+  color: #999;
+  cursor: not-allowed;
+}
+
 /* Loading and empty states */
 .loading-row, .empty-row {
   text-align: center;

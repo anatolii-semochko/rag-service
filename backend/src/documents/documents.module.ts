@@ -7,6 +7,7 @@ import { DocumentsService } from './services/documents.service';
 import { Document } from './entities/document.entity';
 import { Chunk } from './entities/chunk.entity';
 import { Collection } from '../collections/entities/collection.entity';
+import { QueueModule } from '../queue/queue.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { Collection } from '../collections/entities/collection.entity';
         fileSize: 50 * 1024 * 1024, // 50MB
       },
     }),
+    QueueModule,
   ],
   controllers: [DocumentsController],
   providers: [DocumentsService],
