@@ -49,6 +49,9 @@ class RAGApp {
       this.updateAddCollectionButton();
       this.updateDocumentsTable(); // Update new table structure
     }, 100);
+
+    // Start auto-refresh for processing status
+    this.startStatusAutoRefresh();
   }
 
   // API Methods
@@ -877,26 +880,41 @@ class RAGApp {
 
   getProcessingStatus(item) {
     // For files (documents), check actual processing status
-    if (item.isProcessed !== undefined) {
-      // Check metadata for processing status
+    if (item.isProcessed !== undefined || item.metadata !== undefined) {
+      // Check metadata for processing status first
       if (item.metadata && item.metadata.status) {
-        switch (item.metadata.status) {
+        switch (item.metadata.status.toLowerCase()) {
           case 'reprocessing':
             return { class: 'status-processing', text: 'Reprocessing' };
           case 'failed':
+          case 'error':
             return { class: 'status-error', text: 'Failed' };
           case 'completed':
+          case 'processed':
             return { class: 'status-completed', text: 'Completed' };
-          default:
+          case 'processing':
             return { class: 'status-processing', text: 'Processing' };
+          case 'pending':
+          case 'queued':
+            return { class: 'status-pending', text: 'Queued' };
+          default:
+            // Fallback to isProcessed flag if status is unclear
+            break;
         }
       }
 
-      // Fallback to isProcessed flag
+      // Check isProcessed flag
       if (item.isProcessed === true) {
         return { class: 'status-completed', text: 'Completed' };
       } else if (item.isProcessed === false) {
         return { class: 'status-processing', text: 'Processing' };
+      } else if (item.isProcessed === null) {
+        return { class: 'status-pending', text: 'Queued' };
+      }
+
+      // If file exists but no processing info, assume it needs processing
+      if (item.originalFilename || item.filename) {
+        return { class: 'status-pending', text: 'Pending' };
       }
     }
 
@@ -907,18 +925,50 @@ class RAGApp {
       if (totalCollections === 0) {
         return { class: 'status-pending', text: 'Empty' };
       }
-      return { class: 'status-completed', text: 'Active' };
+
+      // Check if all collections have processed documents
+      let hasUnprocessedFiles = false;
+      if (item.collections) {
+        for (const collection of item.collections) {
+          if (collection.documents) {
+            for (const doc of collection.documents) {
+              if (!doc.isProcessed) {
+                hasUnprocessedFiles = true;
+                break;
+              }
+            }
+          }
+          if (hasUnprocessedFiles) break;
+        }
+      }
+
+      return hasUnprocessedFiles ?
+        { class: 'status-processing', text: 'Processing' } :
+        { class: 'status-completed', text: 'Ready' };
+
     } else if (item.documents !== undefined || item.documentsCount !== undefined) {
-      // Collection - check documents count
+      // Collection - check documents count and status
       const totalDocs = item.documentsCount || (item.documents ? item.documents.length : 0);
       if (totalDocs === 0) {
         return { class: 'status-pending', text: 'Empty' };
       }
-      return { class: 'status-completed', text: 'Active' };
+
+      // Check if all documents are processed
+      if (item.documents) {
+        const unprocessedDocs = item.documents.filter(doc => !doc.isProcessed);
+        if (unprocessedDocs.length > 0) {
+          return { class: 'status-processing', text: `${unprocessedDocs.length}/${totalDocs} Processing` };
+        } else {
+          return { class: 'status-completed', text: `${totalDocs} Ready` };
+        }
+      } else {
+        // If we only have count, assume they're ready
+        return { class: 'status-completed', text: 'Ready' };
+      }
     }
 
-    // Default status
-    return { class: 'status-pending', text: 'Pending' };
+    // Default status for unknown items
+    return { class: 'status-pending', text: 'Unknown' };
   }
 
   getFileIcon(type) {
@@ -1831,14 +1881,24 @@ class RAGApp {
         const result = await response.json();
         console.log(`File ${fileId} reprocessing started:`, result);
 
-        // Показуємо повідомлення користувачу
+        // Show message to user
         alert(`Analysis started for file! Status: ${result.status}`);
 
-        // Оновлюємо таблицю файлів, щоб показати статус "processing"
-        await this.fetchCategories();
+        // IMPORTANT: Immediately update file status in local cache
+        this.updateFileStatusLocally(fileId, {
+          isProcessed: false,
+          metadata: {
+            ...this.getFileMetadata(fileId),
+            status: 'processing',
+            reprocessedAt: new Date().toISOString()
+          }
+        });
+
+        // Update visual display
         this.updateDocumentsTable();
 
-        // Опціонально: почати перевіряти статус обробки
+        // Update categories and start checking processing status
+        await this.fetchCategories();
         this.checkProcessingStatus(fileId);
       } else {
         const errorData = await response.json();
@@ -1859,18 +1919,32 @@ class RAGApp {
         console.log(`Processing status for ${documentId}:`, result.status);
 
         if (result.status === 'processing') {
-          // Перевіряємо знову через 5 секунд
+          // Check again in 5 seconds
           setTimeout(() => this.checkProcessingStatus(documentId), 5000);
         } else if (result.status === 'completed') {
           console.log(`Processing completed for document ${documentId}`);
-          // Оновлюємо дані
-          await this.fetchCategories();
-          this.updateDocumentsTable();
+          // Update specific file
+          const freshFile = await this.refreshFileStatus(documentId);
+          if (freshFile) {
+            console.log(`File ${documentId} status updated to completed`);
+          } else {
+            // Fallback to general update
+            await this.fetchCategories();
+            this.updateDocumentsTable();
+          }
         } else if (result.status === 'failed') {
           console.error(`Processing failed for document ${documentId}`);
-          alert('Analysis failed. Please try again or check the file format.');
-          await this.fetchCategories();
+          // Update file status to failed
+          this.updateFileStatusLocally(documentId, {
+            isProcessed: false,
+            metadata: {
+              ...this.getFileMetadata(documentId),
+              status: 'failed',
+              failedAt: new Date().toISOString()
+            }
+          });
           this.updateDocumentsTable();
+          alert('Analysis failed. Please try again or check the file format.');
         }
       }
     } catch (error) {
@@ -2156,6 +2230,159 @@ class RAGApp {
     // TODO: Implement data export
     alert('Data export - will be implemented later');
   }
+
+  // Auto-refresh functionality for processing statuses
+  startStatusAutoRefresh() {
+    // Refresh every 10 seconds when on documents tab and there are processing items
+    this.statusRefreshInterval = setInterval(() => {
+      if (this.activeTab === 'documents' && this.hasProcessingItems()) {
+        this.refreshProcessingStatuses();
+      }
+    }, 10000);
+  }
+
+  hasProcessingItems() {
+    // Check if there are any files being processed
+    for (const collectionId in this.collectionFiles) {
+      const files = this.collectionFiles[collectionId];
+      if (files && files.some(file => !file.isProcessed)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async refreshProcessingStatuses() {
+    try {
+      // Silently refresh collections to get updated processing statuses with documents
+      const response = await fetch(config.getCollectionsUrl());
+      if (response.ok) {
+        const result = await response.json();
+        const newCollections = result.data || result;
+
+        // Compare with current data and update only if changed
+        let hasChanges = false;
+        const updatedFileIds = new Set();
+
+        newCollections.forEach(newCollection => {
+          if (newCollection.documents) {
+            newCollection.documents.forEach(newDoc => {
+              // Check if file status actually changed
+              let oldDoc = null;
+
+              // Find in collectionFiles cache
+              if (this.collectionFiles[newCollection.id]) {
+                oldDoc = this.collectionFiles[newCollection.id].find(doc => doc.id === newDoc.id);
+              }
+
+              // Check if status changed
+              const statusChanged = oldDoc && (
+                oldDoc.isProcessed !== newDoc.isProcessed ||
+                (oldDoc.metadata?.status) !== (newDoc.metadata?.status) ||
+                (oldDoc.updatedAt) !== (newDoc.updatedAt)
+              );
+
+              if (statusChanged) {
+                console.log(`Status changed for file ${newDoc.id}:`, {
+                  old: { isProcessed: oldDoc.isProcessed, status: oldDoc.metadata?.status },
+                  new: { isProcessed: newDoc.isProcessed, status: newDoc.metadata?.status }
+                });
+
+                // Update using our helper method
+                this.updateFileStatusLocally(newDoc.id, newDoc);
+                updatedFileIds.add(newDoc.id);
+                hasChanges = true;
+              }
+            });
+          }
+        });
+
+        // Update UI if there were changes
+        if (hasChanges) {
+          this.updateDocumentsTable();
+          console.log(`Processing statuses updated for files: [${Array.from(updatedFileIds).join(', ')}]`);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing processing statuses:', error);
+    }
+  }
+
+  // Helper methods for local file status updates
+  updateFileStatusLocally(fileId, updates) {
+    console.log(`Updating file ${fileId} locally:`, updates);
+
+    // Update in collectionFiles
+    for (const collectionId in this.collectionFiles) {
+      const files = this.collectionFiles[collectionId];
+      const fileIndex = files.findIndex(f => f.id === fileId);
+      if (fileIndex > -1) {
+        Object.assign(files[fileIndex], updates);
+        console.log(`Updated file in collection ${collectionId}:`, files[fileIndex]);
+        break;
+      }
+    }
+
+    // Update in categories data if loaded
+    if (this.categories) {
+      for (const category of this.categories) {
+        if (category.collections) {
+          for (const collection of category.collections) {
+            if (collection.documents) {
+              const docIndex = collection.documents.findIndex(doc => doc.id === fileId);
+              if (docIndex > -1) {
+                Object.assign(collection.documents[docIndex], updates);
+                console.log(`Updated file in category data:`, collection.documents[docIndex]);
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  getFileMetadata(fileId) {
+    // Find file metadata in collectionFiles
+    for (const collectionId in this.collectionFiles) {
+      const files = this.collectionFiles[collectionId];
+      const file = files.find(f => f.id === fileId);
+      if (file && file.metadata) {
+        return file.metadata;
+      }
+    }
+    return {};
+  }
+
+  // Improved file refresh after reprocessing
+  async refreshFileStatus(fileId) {
+    try {
+      // Get fresh file data from API
+      const response = await fetch(config.getDocumentUrl(fileId));
+      if (response.ok) {
+        const freshFileData = await response.json();
+        console.log(`Fresh file data for ${fileId}:`, freshFileData);
+
+        // Update local cache
+        this.updateFileStatusLocally(fileId, freshFileData);
+
+        // Update display
+        this.updateDocumentsTable();
+
+        return freshFileData;
+      }
+    } catch (error) {
+      console.error('Error refreshing file status:', error);
+    }
+    return null;
+  }
+
+  // Clean up interval on page unload
+  destructor() {
+    if (this.statusRefreshInterval) {
+      clearInterval(this.statusRefreshInterval);
+    }
+  }
 }
 
 // Initialize the app when the page loads
@@ -2163,4 +2390,11 @@ let app;
 document.addEventListener('DOMContentLoaded', () => {
   app = new RAGApp();
   window.app = app; // Make app globally available for onclick handlers
+});
+
+// Clean up intervals when page is unloaded
+window.addEventListener('beforeunload', () => {
+  if (app) {
+    app.destructor();
+  }
 });

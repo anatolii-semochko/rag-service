@@ -220,7 +220,7 @@ export class DocumentsService {
   }
 
   async reprocessDocument(id: string): Promise<{ documentId: string; status: string; message: string }> {
-    // Знайти документ
+    // Find document
     const document = await this.documentsRepository.findOne({
       where: { id },
     });
@@ -234,7 +234,7 @@ export class DocumentsService {
     }
 
     try {
-      // Скинути статус обробки
+      // Reset processing status
       const updatedMetadata = {
         ...document.metadata,
         status: 'reprocessing',
@@ -247,7 +247,7 @@ export class DocumentsService {
         updatedAt: new Date(),
       });
 
-      // Створити фейковий Multer файл для обробки
+      // Create fake Multer file for processing
       const mockFile: Express.Multer.File = {
         fieldname: 'file',
         originalname: document.originalFilename,
@@ -261,7 +261,7 @@ export class DocumentsService {
         stream: null,
       };
 
-      // Додати в чергу обробки
+      // Add to processing queue
       await this.addToProcessingQueue(document, mockFile);
 
       return {
@@ -310,8 +310,8 @@ export class DocumentsService {
       console.log(`Added document ${document.id} to processing queue`);
     } catch (error) {
       console.error(`Error adding document ${document.id} to queue:`, error);
-      // Не викидаємо помилку, щоб не перервати завантаження файлу
-      // Файл збережеться, але не буде оброблено
+      // Don't throw error to avoid interrupting file upload
+      // File will be saved but not processed
     }
   }
 }
