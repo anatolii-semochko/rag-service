@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ProcessFileJob, JobResult, QueueService } from '../interfaces/queue.interface';
 import { Document } from '../../documents/entities/document.entity';
 import { ChunkingService } from '../../ai/services/chunking.service';
+import { VectorStorageService, ChunkWithEmbedding } from '../../ai/services/vector-storage.service';
 import { OpenAIProvider } from '../../ai/providers/openai.provider';
 
 @Injectable()
@@ -14,17 +15,18 @@ export class FileProcessingQueueService implements QueueService {
     @InjectRepository(Document)
     private documentsRepository: Repository<Document>,
     private chunkingService: ChunkingService,
+    private vectorStorageService: VectorStorageService,
     private openAIProvider: OpenAIProvider,
   ) {}
 
   async addJob(job: ProcessFileJob): Promise<void> {
     console.log(`Adding job for document ${job.documentId}`);
 
-    // Запускаємо обробку в фоні
+    // Start processing in background
     const processingPromise = this.processJob(job);
     this.processingJobs.set(job.documentId, processingPromise);
 
-    // Обробляємо результат асинхронно
+    // Process result asynchronously
     processingPromise
       .then(async (result) => {
         await this.updateDocumentStatus(result);
@@ -46,7 +48,7 @@ export class FileProcessingQueueService implements QueueService {
     console.log(`Processing document ${job.documentId}`);
 
     try {
-      // 1. Витягуємо текст з файлу
+      // 1. Extract text from file
       const text = this.chunkingService.extractTextFromFile(
         job.fileBuffer,
         job.mimeType,
@@ -57,7 +59,7 @@ export class FileProcessingQueueService implements QueueService {
         throw new Error('No text extracted from file');
       }
 
-      // 2. Розділяємо на чанки
+      // 2. Split into chunks
       const chunks = this.chunkingService.chunkText(text);
 
       if (chunks.length === 0) {
@@ -66,7 +68,7 @@ export class FileProcessingQueueService implements QueueService {
 
       console.log(`Generated ${chunks.length} chunks for document ${job.documentId}`);
 
-      // 3. Створюємо ембеддінги для кожного чанка
+      // 3. Create embeddings for each chunk
       const embeddings = [];
       let totalTokens = 0;
 
@@ -84,7 +86,7 @@ export class FileProcessingQueueService implements QueueService {
           totalTokens += embeddingResult.tokens;
         } catch (error) {
           console.error(`Failed to create embedding for chunk ${chunks.indexOf(chunk)}:`, error);
-          // Продовжуємо з іншими чанками
+          // Continue with other chunks
         }
       }
 
@@ -92,10 +94,29 @@ export class FileProcessingQueueService implements QueueService {
         throw new Error('No embeddings created');
       }
 
-      // 4. TODO: Зберігаємо ембеддінги в VectorDB
-      console.log(`Created ${embeddings.length} embeddings for document ${job.documentId}`);
+      // 4. Prepare data for RAG storage
+      const chunksWithEmbeddings: ChunkWithEmbedding[] = chunks.map((chunk, index) => ({
+        documentId: job.documentId,
+        content: chunk.text,
+        chunkIndex: index,
+        tokenCount: chunk.tokens,
+        embedding: embeddings[index]?.embedding || [],
+        metadata: {
+          source: job.filename,
+          mimeType: job.mimeType,
+          chunkHash: this.generateChunkHash(chunk.text),
+          extractedAt: new Date().toISOString(),
+        },
+      }));
 
-      // 5. Зберігаємо метадані в базі даних
+      // 5. Delete old chunks for reprocessing
+      await this.vectorStorageService.deleteChunksByDocument(job.documentId);
+
+      // 6. Store new chunks with embeddings in RAG
+      const storedChunks = await this.vectorStorageService.storeChunks(chunksWithEmbeddings);
+      console.log(`Stored ${storedChunks.length} chunks with embeddings in RAG for document ${job.documentId}`);
+
+      // 7. Save metadata to database
       await this.saveProcessingMetadata(job.documentId, {
         chunks: chunks.length,
         embeddings: embeddings.length,
@@ -129,7 +150,7 @@ export class FileProcessingQueueService implements QueueService {
         updatedAt: new Date(),
       };
 
-      // Додаємо метадані про обробку
+      // Add processing metadata
       if (result.status === 'completed') {
         updateData.metadata = {
           processedAt: result.processedAt,
@@ -155,8 +176,8 @@ export class FileProcessingQueueService implements QueueService {
 
   private async saveProcessingMetadata(documentId: string, metadata: any): Promise<void> {
     try {
-      // Тут можна зберегти додаткові метадані обробки
-      // Наприклад, створити таблицю document_chunks або щось подібне
+      // Here we can save additional processing metadata
+      // For example, create document_chunks table or something similar
       console.log(`Saving processing metadata for document ${documentId}:`, {
         chunks: metadata.chunks,
         embeddings: metadata.embeddings,
@@ -172,7 +193,7 @@ export class FileProcessingQueueService implements QueueService {
       return 'processing';
     }
 
-    // Перевіряємо статус в базі даних
+    // Check status in database
     const document = await this.documentsRepository.findOne({
       where: { id: documentId }
     });
@@ -194,5 +215,13 @@ export class FileProcessingQueueService implements QueueService {
     });
 
     return { processing, totalProcessed };
+  }
+
+  /**
+   * Generates hash for text chunk to track duplicates
+   */
+  private generateChunkHash(text: string): string {
+    // Simple hash for demonstration, in production can use crypto.createHash
+    return Buffer.from(text).toString('base64').substring(0, 16);
   }
 }

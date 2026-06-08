@@ -77,7 +77,7 @@ export class OpenAIProvider implements LLMProvider {
 
   async embeddingsWithTokens(text: string): Promise<EmbeddingResult> {
     const embedding = await this.embeddings(text);
-    // Простий підрахунок токенів (приблизно 1 токен = 4 символи для англійської)
+    // Simple token count (approximately 1 token = 4 characters for English)
     const tokens = Math.ceil(text.length / 4);
 
     return {
