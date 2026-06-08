@@ -1,18 +1,15 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
 
 import { DatabaseModule } from './database/database.module';
-import { AuthModule } from './auth/auth.module';
+import { CommonModule } from './common/common.module';
+import { CategoriesModule } from './categories/categories.module';
 import { CollectionsModule } from './collections/collections.module';
 import { DocumentsModule } from './documents/documents.module';
-import { EmbeddingsModule } from './embeddings/embeddings.module';
 import { ChatModule } from './chat/chat.module';
 import { SearchModule } from './search/search.module';
-import { GraphModule } from './graph/graph.module';
-import { ProvidersModule } from './providers/providers.module';
 
 @Module({
   imports: [
@@ -21,29 +18,35 @@ import { ProvidersModule } from './providers/providers.module';
       envFilePath: ['.env', '.env.local'],
     }),
 
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 10,
-      },
-    ]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => [
+        {
+          ttl: configService.get<number>('THROTTLE_TTL') || 60000,
+          limit: configService.get<number>('THROTTLE_LIMIT') || 10,
+        },
+      ],
+      inject: [ConfigService],
+    }),
 
-    BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT) || 6379,
-      },
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        connection: {
+          host: configService.get<string>('REDIS_HOST') || 'localhost',
+          port: configService.get<number>('REDIS_PORT') || 6379,
+        },
+      }),
+      inject: [ConfigService],
     }),
 
     DatabaseModule,
-    AuthModule,
+    CommonModule,
+    CategoriesModule,
     CollectionsModule,
     DocumentsModule,
-    EmbeddingsModule,
     ChatModule,
     SearchModule,
-    GraphModule,
-    ProvidersModule,
   ],
 })
 export class AppModule {}

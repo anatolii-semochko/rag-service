@@ -9,26 +9,40 @@ services:
       POSTGRES_DB: rag_db
       POSTGRES_USER: rag_user
       POSTGRES_PASSWORD: rag_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - "5432:5432"
+      - "${DB_EXTERNAL_PORT:-5433}:5432"
     networks:
       - rag-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   # Redis for caching and BullMQ
   redis:
     image: redis:7-alpine
     container_name: rag-redis
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     ports:
       - "6379:6379"
     networks:
       - rag-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
 
-  # NestJS Backend API
+  # NestJS Backend API (Development)
   backend:
     build:
       context: ./backend
@@ -38,18 +52,27 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgresql://rag_user:rag_password@postgres:5432/rag_db
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: your-jwt-secret-change-in-production
+      API_PORT: ${API_PORT:-3001}
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret-change-in-production}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-50MB}
+      UPLOAD_DIR: ${UPLOAD_DIR:-./uploads}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+      CHUNK_SIZE: ${CHUNK_SIZE:-500}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-50}
     ports:
-      - "3001:3001"
+      - "${API_PORT:-3001}:${API_PORT:-3001}"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - ./backend:/app
-      - /app/node_modules
+      - uploads_data:/app/uploads
     networks:
       - rag-network
+    restart: unless-stopped
 
   # React Frontend
   frontend:
@@ -92,6 +115,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads_data:
 
 networks:
   rag-network:
