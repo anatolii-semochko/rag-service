@@ -6,8 +6,10 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const app = express();
 const PORT = process.env.FRONTEND_PORT || 3000;
 
-// Serve static files from src directory
-app.use(express.static('src'));
+// Serve static files from public directory
+app.use(express.static('public'));
+// Serve static files from src directory for modules
+app.use('/src', express.static('src'));
 
 // Configuration endpoint for frontend
 app.get('/config.js', (req, res) => {
@@ -33,7 +35,7 @@ console.log('📡 API Configuration loaded from server:', window.__APP_CONFIG__.
 
 // Serve the main HTML file
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'src', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // API endpoint to get tab navigation data

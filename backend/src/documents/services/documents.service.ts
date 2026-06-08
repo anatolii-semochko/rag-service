@@ -190,21 +190,16 @@ export class DocumentsService {
   }
 
   async toggleActive(id: string, isActive: boolean): Promise<DocumentResponseDto> {
-    // Mock implementation - return updated test data
-    const mockDocument: DocumentResponseDto = {
-      id,
-      collectionId: '123e4567-e89b-12d3-a456-426614174000',
-      originalFilename: 'annual-report-2024.pdf',
-      fileType: 'pdf',
-      fileSize: 2048576,
-      status: 'completed',
-      metadata: { tags: ['finance', 'annual'], folder: '/reports' },
-      isActive,
-      createdAt: '2024-01-15T10:00:00.000Z',
-      updatedAt: new Date().toISOString(),
-    };
+    const document = await this.documentsRepository.findOne({ where: { id } });
 
-    return mockDocument;
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    document.isActive = isActive;
+    await this.documentsRepository.save(document);
+
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {

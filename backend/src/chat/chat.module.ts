@@ -5,11 +5,13 @@ import { ChatService } from './services/chat.service';
 import { ChatSession } from './entities/chat-session.entity';
 import { ChatMessage } from './entities/chat-message.entity';
 import { SearchModule } from '../search/search.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ChatSession, ChatMessage]),
     SearchModule,
+    AiModule,
   ],
   controllers: [ChatController],
   providers: [ChatService],
