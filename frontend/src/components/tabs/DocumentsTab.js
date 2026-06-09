@@ -47,10 +47,15 @@ export class DocumentsTab extends BaseComponent {
     try {
       this.setState({ loadingCollections: true });
       const response = await collectionsService.getCollectionsByCategory(categoryId);
-      this.setState({
-        collections: response.data || [],
+
+      // Update categoryCollections object with new data for this category
+      this.setState((prevState) => ({
+        categoryCollections: {
+          ...prevState.categoryCollections,
+          [categoryId]: response.data || []
+        },
         loadingCollections: false
-      });
+      }));
     } catch (error) {
       console.error('Error fetching collections:', error);
       this.setState({ loadingCollections: false });
@@ -61,10 +66,15 @@ export class DocumentsTab extends BaseComponent {
     try {
       this.setState({ loadingFiles: true });
       const response = await documentsService.getDocumentsByCollection(collectionId);
-      this.setState({
-        files: response.data || [],
+
+      // Update collectionFiles object with new data for this collection
+      this.setState((prevState) => ({
+        collectionFiles: {
+          ...prevState.collectionFiles,
+          [collectionId]: response.data || []
+        },
         loadingFiles: false
-      });
+      }));
     } catch (error) {
       console.error('Error fetching files:', error);
       this.setState({ loadingFiles: false });
@@ -77,24 +87,14 @@ export class DocumentsTab extends BaseComponent {
         <div class="documents-header">
           <h2>📄 Document Manager</h2>
           <div class="header-actions">
-            <button class="btn-primary" onclick="window.app.openCategoryModal()" title="Add Category">➕ New Category</button>
-            <button class="btn-secondary" onclick="window.app.exportData()" title="Export Data">📥 Export</button>
+            <button class="btn btn-primary" onclick="window.app.openCategoryModal()" title="Add Category">➕ New Category</button>
+            <button class="btn btn-secondary" onclick="window.app.exportData()" title="Export Data">📥 Export</button>
+            <button class="btn btn-ghost" onclick="window.app.reloadDocuments()" title="Reload Data">🔄 Reload</button>
           </div>
         </div>
 
         <div class="documents-table-container">
           <table class="documents-table">
-            <thead>
-              <tr>
-                <th width="40"></th>
-                <th>Name</th>
-                <th width="120">Collections</th>
-                <th width="100">Files</th>
-                <th width="150">Processing Status</th>
-                <th width="80">Active</th>
-                <th width="200">Actions</th>
-              </tr>
-            </thead>
             <tbody id="documents-table-body">
               ${this.renderCategoriesTableRows()}
             </tbody>
@@ -120,7 +120,7 @@ export class DocumentsTab extends BaseComponent {
 
       let rows = `
         <tr class="category-row" data-category-id="${category.id}">
-          <td>
+          <td style="width: 60px">
             <button class="expand-btn ${isExpanded ? 'expanded' : ''}" onclick="window.app.toggleCategoryExpand('${category.id}')" ${collectionsCount === 0 ? 'disabled' : ''}>
               ${collectionsCount > 0 ? (isExpanded ? '▼' : '▶') : ''}
             </button>
@@ -131,17 +131,14 @@ export class DocumentsTab extends BaseComponent {
               <span class="category-name" ondblclick="window.app.editCategoryName('${category.id}')" title="Double click to edit">${stringUtils.escapeHtml(category.name)}</span>
             </div>
           </td>
-          <td class="count-cell">${collectionsCount}</td>
-          <td class="count-cell">${totalFiles}</td>
+          <td class="count-cell">${collectionsCount} / ${totalFiles}</td>
           <td class="status-cell">
             <span class="status-badge ${this.getProcessingStatus(category).class}">${this.getProcessingStatus(category).text}</span>
           </td>
-          <td class="toggle-cell">
-            <button class="toggle-switch ${category.isActive ? 'active' : 'inactive'}" onclick="window.app.toggleCategoryActive('${category.id}', ${category.isActive})" title="${category.isActive ? 'Deactivate' : 'Activate'}">
+          <td class="actions-cell">
+            <button class="toggle-switch ${category.isActive ? 'active' : 'inactive'}" style="margin-right: 80px" onclick="window.app.toggleCategoryActive('${category.id}', ${category.isActive})" title="${category.isActive ? 'Deactivate' : 'Activate'}">
               <span class="switch-slider"></span>
             </button>
-          </td>
-          <td class="actions-cell">
             <button class="btn-icon add-collection-btn" onclick="window.app.openCollectionModal('${category.id}')" title="Add Collection">➕</button>
             <button class="btn-icon edit-btn" onclick="window.app.editCategoryName('${category.id}')" title="Edit">✏️</button>
             <button class="btn-icon delete-btn ${collectionsCount > 0 ? 'disabled' : ''}" onclick="window.app.deleteCategoryWithConfirm('${category.id}', '${stringUtils.escapeHtml(category.name)}', ${collectionsCount > 0})" ${collectionsCount > 0 ? 'disabled' : ''} title="${collectionsCount > 0 ? 'Cannot delete category with collections' : 'Delete category'}">🗑️</button>
@@ -153,9 +150,8 @@ export class DocumentsTab extends BaseComponent {
       if (isExpanded && this.state.categoryCollections[category.id]) {
         rows += `
           <tr class="expanded-row">
-            <td colspan="7" class="expanded-cell">
+            <td colspan="5" class="expanded-cell">
               <div class="nested-table-container">
-                <h4 class="nested-title">📁 Collections in Category "${stringUtils.escapeHtml(category.name)}"</h4>
                 ${this.renderCollectionsTable(category.id)}
               </div>
             </td>
@@ -176,16 +172,6 @@ export class DocumentsTab extends BaseComponent {
 
     let tableHTML = `
       <table class="nested-table collections-table">
-        <thead>
-          <tr>
-            <th width="40"></th>
-            <th>Collection Name</th>
-            <th width="100">Files</th>
-            <th width="150">Processing Status</th>
-            <th width="80">Active</th>
-            <th width="180">Actions</th>
-          </tr>
-        </thead>
         <tbody>
     `;
 
@@ -193,9 +179,13 @@ export class DocumentsTab extends BaseComponent {
       const isExpanded = this.state.expandedCollections.has(collection.id);
       const documentsCount = collection.documentsCount || collection.documents?.length || 0;
 
+      // Визначаємо, чи вимкнений switcher через неактивну категорію
+      const category = this.state.categories.find(cat => cat.id === categoryId);
+      const disabledByParent = !category || category.isActive === false;
+
       tableHTML += `
         <tr class="collection-row" data-collection-id="${collection.id}">
-          <td>
+          <td width="90">
             <button class="expand-btn ${isExpanded ? 'expanded' : ''}" onclick="window.app.toggleCollectionExpand('${collection.id}')" ${documentsCount === 0 ? 'disabled' : ''}>
               ${documentsCount > 0 ? (isExpanded ? '▼' : '▶') : ''}
             </button>
@@ -207,12 +197,11 @@ export class DocumentsTab extends BaseComponent {
           <td class="status-cell">
             <span class="status-badge ${this.getProcessingStatus(collection).class}">${this.getProcessingStatus(collection).text}</span>
           </td>
-          <td class="toggle-cell">
-            <button class="toggle-switch ${collection.isActive ? 'active' : 'inactive'}" onclick="window.app.toggleCollectionActive('${collection.id}', ${collection.isActive})" title="${collection.isActive ? 'Deactivate' : 'Activate'}">
-              <span class="switch-slider"></span>
-            </button>
           </td>
           <td class="actions-cell">
+            <button class="toggle-switch ${collection.isActive ? 'active' : 'inactive'} ${disabledByParent ? 'disabled-by-parent' : ''}" style="margin-right: 40px" onclick="window.app.toggleCollectionActive('${collection.id}', ${collection.isActive})" title="${collection.isActive ? 'Deactivate' : 'Activate'}">
+              <span class="switch-slider"></span>
+            </button>
             <button class="btn-icon upload-btn" onclick="window.app.openFileUpload('${collection.id}')" title="Upload Files">📤</button>
             <button class="btn-icon edit-btn" onclick="window.app.editCollectionName('${collection.id}')" title="Edit">✏️</button>
             <button class="btn-icon delete-btn ${documentsCount > 0 ? 'disabled' : ''}" onclick="window.app.deleteCollectionWithConfirm('${collection.id}', '${stringUtils.escapeHtml(collection.name)}', ${documentsCount > 0})" ${documentsCount > 0 ? 'disabled' : ''} title="${documentsCount > 0 ? 'Cannot delete collection with files' : 'Delete collection'}">🗑️</button>
@@ -224,9 +213,8 @@ export class DocumentsTab extends BaseComponent {
       if (isExpanded && this.state.collectionFiles[collection.id]) {
         tableHTML += `
           <tr class="expanded-row">
-            <td colspan="6" class="expanded-cell">
+            <td colspan="5" class="expanded-cell">
               <div class="nested-table-container files-container">
-                <h5 class="nested-title">📄 Files in Collection "${stringUtils.escapeHtml(collection.name)}"</h5>
                 ${this.renderFilesTable(collection.id)}
               </div>
             </td>
@@ -248,19 +236,20 @@ export class DocumentsTab extends BaseComponent {
 
     let tableHTML = `
       <table class="nested-table files-table">
-        <thead>
-          <tr>
-            <th>File Name</th>
-            <th width="120">Size</th>
-            <th width="150">Processing Status</th>
-            <th width="80">Active</th>
-            <th width="140">Actions</th>
-          </tr>
-        </thead>
         <tbody>
     `;
 
     files.forEach(file => {
+      // Визначаємо, чи вимкнений switcher через неактивні батьків
+      const collection = this.findCollectionInAllCategories(collectionId);
+      const category = this.state.categories.find(cat =>
+        this.state.categoryCollections[cat.id]?.some(col => col.id === collectionId)
+      );
+
+      const isCollectionActive = collection?.isActive !== false;
+      const isCategoryActive = category?.isActive !== false;
+      const disabledByParent = !isCollectionActive || !isCategoryActive;
+
       tableHTML += `
         <tr class="file-row" data-file-id="${file.id}">
           <td>
@@ -272,12 +261,10 @@ export class DocumentsTab extends BaseComponent {
           <td class="status-cell">
             <span class="status-badge ${this.getProcessingStatus(file).class}">${this.getProcessingStatus(file).text}</span>
           </td>
-          <td class="toggle-cell">
-            <button class="toggle-switch ${file.isActive ? 'active' : 'inactive'}" onclick="window.app.toggleFileActive('${file.id}', ${file.isActive})" title="${file.isActive ? 'Deactivate' : 'Activate'}">
+          <td class="actions-cell">
+            <button class="toggle-switch ${file.isActive ? 'active' : 'inactive'} ${disabledByParent ? 'disabled-by-parent' : ''}" onclick="window.app.toggleFileActive('${file.id}', ${file.isActive})" title="${file.isActive ? 'Deactivate' : 'Activate'}">
               <span class="switch-slider"></span>
             </button>
-          </td>
-          <td class="actions-cell">
             <button class="btn-icon preview-btn" onclick="window.app.previewFile('${file.id}')" title="Preview Content">👁️</button>
             <button class="btn-icon reprocess-btn" onclick="window.app.reprocessDocument('${file.id}')" title="Reprocess Document">🔄</button>
             <button class="btn-icon delete-btn" onclick="window.app.deleteFileWithConfirm('${file.id}', '${stringUtils.escapeHtml(file.originalFilename || file.filename || file.title)}')" title="Delete File">🗑️</button>
@@ -369,17 +356,85 @@ export class DocumentsTab extends BaseComponent {
     }
   }
 
+  closeEmptyExpandedItems() {
+    const expandedCategories = new Set(this.state.expandedCategories);
+    const expandedCollections = new Set(this.state.expandedCollections);
+    let needsUpdate = false;
+
+    // Закриваємо категорії без колекцій
+    for (const categoryId of this.state.expandedCategories) {
+      const category = this.state.categories.find(cat => cat.id === categoryId);
+      if (!category || (category.collectionsCount || 0) === 0) {
+        expandedCategories.delete(categoryId);
+        needsUpdate = true;
+      }
+    }
+
+    // Закриваємо колекції без файлів
+    for (const collectionId of this.state.expandedCollections) {
+      const files = this.state.collectionFiles[collectionId] || [];
+      if (files.length === 0) {
+        expandedCollections.delete(collectionId);
+        needsUpdate = true;
+      }
+    }
+
+    if (needsUpdate) {
+      this.setState({ expandedCategories, expandedCollections });
+    }
+
+  }
+
+  findCollectionInAllCategories(collectionId) {
+    for (const categoryId in this.state.categoryCollections) {
+      const collection = this.state.categoryCollections[categoryId].find(col => col.id === collectionId);
+      if (collection) return collection;
+    }
+    return null;
+  }
+
   async loadData() {
-    // Clear expanded state to avoid stale data
+    // Зберігаємо стани відкритих вкладок
+    const expandedCategories = new Set(this.state.expandedCategories);
+    const expandedCollections = new Set(this.state.expandedCollections);
+
+    // Завантажуємо всі дані з нуля
+    await this.fetchCategories();
+
+    // Завантажуємо колекції для відкритих категорій
+    const categoryCollections = {};
+    for (const categoryId of expandedCategories) {
+      try {
+        const response = await collectionsService.getCollectionsByCategory(categoryId);
+        categoryCollections[categoryId] = response.data || [];
+      } catch (error) {
+        console.error('Error loading collections:', error);
+        categoryCollections[categoryId] = [];
+      }
+    }
+
+    // Завантажуємо файли для відкритих колекцій
+    const collectionFiles = {};
+    for (const collectionId of expandedCollections) {
+      try {
+        const response = await documentsService.getDocumentsByCollection(collectionId);
+        collectionFiles[collectionId] = response.data || [];
+      } catch (error) {
+        console.error('Error loading files:', error);
+        collectionFiles[collectionId] = [];
+      }
+    }
+
+    // Оновлюємо стан
     this.setState({
-      expandedCategories: new Set(),
-      expandedCollections: new Set(),
-      categoryCollections: {},
-      collectionFiles: {}
+      categoryCollections,
+      collectionFiles,
+      expandedCategories,
+      expandedCollections
     });
 
-    await this.fetchCategories();
-    this.updateDocumentsTable();
+    // Закриваємо порожні вкладки і ховаємо стрілочки
+    this.closeEmptyExpandedItems();
   }
 
   updateDocumentsTable() {
@@ -393,15 +448,7 @@ export class DocumentsTab extends BaseComponent {
   async toggleCategoryActive(categoryId, isCurrentlyActive) {
     try {
       await categoriesService.toggleCategory(categoryId, isCurrentlyActive);
-
-      // Update local state
-      const categories = [...this.state.categories];
-      const category = categories.find(cat => cat.id === categoryId);
-      if (category) {
-        category.isActive = !isCurrentlyActive;
-      }
-
-      this.setState({ categories });
+      await this.loadData();
     } catch (error) {
       console.error('Error toggling category:', error);
       alert('Failed to update category status');
@@ -411,18 +458,7 @@ export class DocumentsTab extends BaseComponent {
   async toggleCollectionActive(collectionId, isCurrentlyActive) {
     try {
       await collectionsService.toggleCollection(collectionId, isCurrentlyActive);
-
-      // Update local state in categoryCollections
-      const categoryCollections = { ...this.state.categoryCollections };
-      for (const categoryId in categoryCollections) {
-        const collection = categoryCollections[categoryId].find(col => col.id === collectionId);
-        if (collection) {
-          collection.isActive = !isCurrentlyActive;
-          break;
-        }
-      }
-
-      this.setState({ categoryCollections });
+      await this.loadData();
     } catch (error) {
       console.error('Error toggling collection:', error);
       alert('Failed to update collection status');
@@ -432,18 +468,7 @@ export class DocumentsTab extends BaseComponent {
   async toggleFileActive(fileId, isCurrentlyActive) {
     try {
       await documentsService.toggleDocument(fileId, isCurrentlyActive);
-
-      // Update local state in collectionFiles
-      const collectionFiles = { ...this.state.collectionFiles };
-      for (const collectionId in collectionFiles) {
-        const file = collectionFiles[collectionId].find(f => f.id === fileId);
-        if (file) {
-          file.isActive = !isCurrentlyActive;
-          break;
-        }
-      }
-
-      this.setState({ collectionFiles });
+      await this.loadData();
     } catch (error) {
       console.error('Error toggling file:', error);
       alert('Failed to update file status');
@@ -459,10 +484,7 @@ export class DocumentsTab extends BaseComponent {
     if (confirm(`Are you sure you want to delete category "${categoryName}"?`)) {
       try {
         await categoriesService.deleteCategory(categoryId);
-
-        // Remove from local state
-        const categories = this.state.categories.filter(cat => cat.id !== categoryId);
-        this.setState({ categories });
+        await this.loadData();
       } catch (error) {
         console.error('Error deleting category:', error);
         alert('Failed to delete category');
@@ -479,17 +501,7 @@ export class DocumentsTab extends BaseComponent {
     if (confirm(`Are you sure you want to delete collection "${collectionName}"?`)) {
       try {
         await collectionsService.deleteCollection(collectionId);
-
-        // Remove from local state
-        const categoryCollections = { ...this.state.categoryCollections };
-        for (const categoryId in categoryCollections) {
-          categoryCollections[categoryId] = categoryCollections[categoryId].filter(col => col.id !== collectionId);
-        }
-
-        this.setState({ categoryCollections });
-
-        // Refresh categories to update counts
-        await this.fetchCategories();
+        await this.loadData();
       } catch (error) {
         console.error('Error deleting collection:', error);
         alert('Failed to delete collection');
@@ -501,17 +513,7 @@ export class DocumentsTab extends BaseComponent {
     if (confirm(`Are you sure you want to delete file "${fileName}"?`)) {
       try {
         await documentsService.deleteDocument(fileId);
-
-        // Remove from local state
-        const collectionFiles = { ...this.state.collectionFiles };
-        for (const collectionId in collectionFiles) {
-          collectionFiles[collectionId] = collectionFiles[collectionId].filter(f => f.id !== fileId);
-        }
-
-        this.setState({ collectionFiles });
-
-        // Refresh categories to update counts
-        await this.fetchCategories();
+        await this.loadData();
       } catch (error) {
         console.error('Error deleting file:', error);
         alert('Failed to delete file');

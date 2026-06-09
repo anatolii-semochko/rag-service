@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, IsUUID, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsUUID, MinLength, IsNumber, IsBoolean, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ChatRequestDto {
@@ -37,4 +37,24 @@ export class ChatRequestDto {
   @IsOptional()
   @IsString()
   context?: string;
+
+  @ApiPropertyOptional({
+    description: 'Temperature for AI response randomness (0.0 to 1.0)',
+    example: 0.7,
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  temperature?: number;
+
+  @ApiPropertyOptional({
+    description: 'Whether to use RAG (Retrieval-Augmented Generation)',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  useRAG?: boolean;
 }

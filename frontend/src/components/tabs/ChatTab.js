@@ -16,7 +16,8 @@ export class ChatTab extends BaseComponent {
       showSettings: false,
       temperature: 0.7,
       context: '',
-      currentMessage: ''
+      currentMessage: '',
+      useRAG: true
     };
 
     this.initializeData();
@@ -24,9 +25,16 @@ export class ChatTab extends BaseComponent {
 
   async initializeData() {
     try {
-      const response = await collectionsService.getCollections();
+      // Завантажуємо тільки активні колекції з активних категорій
+      const response = await collectionsService.getActiveCollections();
+      const collections = response.data || [];
+
+      // Автоматично обираємо всі активні колекції
+      const selectedCollections = collections.map(collection => collection.id);
+
       this.setState({
-        collections: response.data || []
+        collections,
+        selectedCollections
       });
     } catch (error) {
       console.error('Failed to load collections:', error);
@@ -38,9 +46,6 @@ export class ChatTab extends BaseComponent {
       <div class="chat-container">
         <div class="chat-header">
           <h3 class="chat-title">💬 RAG Chat</h3>
-          <button class="chat-settings-toggle" onclick="window.app.toggleChatSettings()">
-            ⚙️ Settings
-          </button>
         </div>
 
         <div class="chat-body">
@@ -68,7 +73,7 @@ export class ChatTab extends BaseComponent {
             </div>
           </div>
 
-          <div class="chat-settings ${this.state.showSettings ? 'show' : ''}" id="chatSettings">
+          <div class="chat-settings show" id="chatSettings">
             ${this.renderKnowledgeBaseSettings()}
           </div>
         </div>
@@ -133,17 +138,25 @@ export class ChatTab extends BaseComponent {
 
   renderKnowledgeBaseSettings() {
     return `
-      <div class="settings-section">
-        <h4><span class="settings-icon">📚</span> Knowledge Base</h4>
-
-        <div class="form-group">
-          <label class="form-label">Select Collections</label>
-          ${this.renderCollectionsList()}
-        </div>
-      </div>
 
       <div class="settings-section">
         <h4><span class="settings-icon">🎛️</span> AI Settings</h4>
+
+        <div class="form-group">
+          <div class="rag-setting">
+            <span class="rag-label">Use RAG (Retrieval-Augmented Generation)</span>
+            <button
+              class="toggle-switch ${this.state.useRAG ? 'active' : ''}"
+              style="float: right"
+              onclick="window.app.toggleRAG(!${this.state.useRAG})"
+            >
+              <span class="switch-slider"></span>
+            </button>
+          </div>
+          <div class="settings-help">
+            When enabled, AI will search through your documents to provide informed answers
+          </div>
+        </div>
 
         <div class="form-group">
           <label class="form-label">Temperature: ${this.state.temperature}</label>
@@ -211,7 +224,7 @@ export class ChatTab extends BaseComponent {
           >
           <label for="collection-${collection.id}" class="collection-label">
             📁 ${stringUtils.escapeHtml(collection.name)}
-            ${collection.category ? `<div class="collection-info">${stringUtils.escapeHtml(collection.category.name)} • ${collection.documentsCount || 0} files</div>` : ''}
+            <div class="collection-info">${collection.documentsCount || 0} files</div>
           </label>
         </div>
       `;
@@ -231,7 +244,7 @@ export class ChatTab extends BaseComponent {
       return;
     }
 
-    if (this.state.selectedCollections.length === 0) {
+    if (this.state.useRAG && this.state.selectedCollections.length === 0) {
       alert('Please select at least one collection from the Knowledge Base settings');
       return;
     }
@@ -253,9 +266,10 @@ export class ChatTab extends BaseComponent {
     try {
       const response = await chatService.sendMessage(message, {
         sessionId: this.state.sessionId,
-        collectionIds: this.state.selectedCollections,
+        collectionIds: this.state.useRAG ? this.state.selectedCollections : [],
         context: this.state.context,
-        temperature: this.state.temperature
+        temperature: this.state.temperature,
+        useRAG: this.state.useRAG
       });
 
       const assistantMessage = {
@@ -308,15 +322,41 @@ export class ChatTab extends BaseComponent {
   }
 
   updateTemperature(value) {
-    this.setState({
-      temperature: parseFloat(value)
-    });
+    this.state.temperature = parseFloat(value);
+    this.updateTemperatureDisplay();
+  }
+
+  updateTemperatureDisplay() {
+    const temperatureGroup = this.$('.range-slider').closest('.form-group');
+    if (temperatureGroup) {
+      const temperatureLabel = temperatureGroup.querySelector('.form-label');
+      const temperatureSlider = temperatureGroup.querySelector('.range-slider');
+      if (temperatureLabel && temperatureSlider) {
+        temperatureLabel.textContent = `Temperature: ${this.state.temperature}`;
+        temperatureSlider.value = this.state.temperature;
+      }
+    }
   }
 
   updateContext(value) {
-    this.setState({
-      context: value
-    });
+    this.state.context = value;
+  }
+
+  toggleRAG(newValue) {
+    this.state.useRAG = newValue;
+    this.updateToggleSwitch();
+  }
+
+  updateToggleSwitch() {
+    const toggleSwitch = this.$('.toggle-switch');
+    if (toggleSwitch) {
+      if (this.state.useRAG) {
+        toggleSwitch.classList.add('active');
+      } else {
+        toggleSwitch.classList.remove('active');
+      }
+      toggleSwitch.onclick = () => window.app.toggleRAG(!this.state.useRAG);
+    }
   }
 
   toggleSources(headerElement) {

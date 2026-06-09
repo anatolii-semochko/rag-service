@@ -28,7 +28,7 @@
 }
 
 .container {
-  max-width: var(--container-max-width);
+  width: 90%;
   margin: 0 auto;
   padding: 0 var(--space-md);
 }
@@ -317,7 +317,6 @@
 .modal-body {
   padding: var(--space-lg);
   overflow-y: auto;
-  max-height: 60vh;
 }
 
 .modal-footer {

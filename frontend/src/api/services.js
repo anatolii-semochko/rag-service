@@ -65,6 +65,10 @@ export class CollectionsService extends BaseService {
   async toggleCollection(id, isActive) {
     return this.client.patch(`/collections/${id}`, { isActive: !isActive });
   }
+
+  async getActiveCollections() {
+    return this.client.get('/collections/active');
+  }
 }
 
 // Documents Service

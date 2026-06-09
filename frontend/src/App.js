@@ -38,6 +38,7 @@ export class App extends BaseComponent {
       toggleCollection: (id, checked) => this.tabs.chat?.toggleCollection(id, checked),
       updateTemperature: (value) => this.tabs.chat?.updateTemperature(value),
       updateContext: (value) => this.tabs.chat?.updateContext(value),
+      toggleRAG: (newValue) => this.tabs.chat?.toggleRAG(newValue),
       toggleSources: (element) => this.tabs.chat?.toggleSources(element),
       clearChat: () => this.tabs.chat?.clearChat(),
       startNewChat: () => this.tabs.chat?.startNewChat(),
@@ -55,6 +56,7 @@ export class App extends BaseComponent {
       // Modal and form methods
       openCategoryModal: () => this.openCategoryModal(),
       exportData: () => alert('Export data functionality not yet implemented'),
+      reloadDocuments: () => this.reloadDocuments(),
       editCategoryName: (id) => this.editCategoryName(id),
       openCollectionModal: (categoryId) => this.openCollectionModal(categoryId),
       editCollectionName: (id) => this.editCollectionName(id),
@@ -73,6 +75,12 @@ export class App extends BaseComponent {
 
     this.render();
     await this.initializeTabs();
+  }
+
+  async reloadDocuments() {
+    if (this.tabs.documents) {
+      await this.tabs.documents.loadData();
+    }
   }
 
   async initializeTabs() {
@@ -195,7 +203,9 @@ export class App extends BaseComponent {
 
     // Clean up current tab
     if (this.tabs[this.state.activeTab]) {
-      this.tabs[this.state.activeTab].unmount();
+      if (typeof this.tabs[this.state.activeTab].unmount === 'function') {
+        this.tabs[this.state.activeTab].unmount();
+      }
       this.tabs[this.state.activeTab] = null;
     }
 
@@ -307,8 +317,7 @@ export class App extends BaseComponent {
       const { documentsService } = await import('./api/services.js');
       const result = await documentsService.reprocessDocument(documentId);
 
-      console.log('Document reprocessing started:', result);
-      alert('Document reprocessing started. You can monitor the progress in the status column.');
+      console.log('111 Document reprocessing started:', result);
 
       // Refresh documents tab if active
       if (this.tabs.documents) {
