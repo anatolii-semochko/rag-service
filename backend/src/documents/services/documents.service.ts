@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Document } from '../entities/document.entity';
 import { Collection } from '../../collections/entities/collection.entity';
+import { Chunk } from '../entities/chunk.entity';
 import { UploadDocumentDto } from '../dto/upload-document.dto';
 import { DocumentResponseDto } from '../dto/document-response.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
@@ -17,6 +18,8 @@ export class DocumentsService {
     private documentsRepository: Repository<Document>,
     @InjectRepository(Collection)
     private collectionsRepository: Repository<Collection>,
+    @InjectRepository(Chunk)
+    private chunksRepository: Repository<Chunk>,
     private fileProcessingQueue: FileProcessingQueueService,
   ) {}
 
@@ -211,6 +214,10 @@ export class DocumentsService {
       throw new NotFoundException('Document not found');
     }
 
+    // First, delete all chunks (including their embeddings) for this document
+    await this.chunksRepository.delete({ documentId: id });
+
+    // Then delete the document itself
     await this.documentsRepository.delete(id);
   }
 
