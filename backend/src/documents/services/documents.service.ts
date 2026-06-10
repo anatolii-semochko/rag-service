@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Document } from '../entities/document.entity';
 import { Collection } from '../../collections/entities/collection.entity';
+import { Chunk } from '../entities/chunk.entity';
 import { UploadDocumentDto } from '../dto/upload-document.dto';
 import { DocumentResponseDto } from '../dto/document-response.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
@@ -17,6 +18,8 @@ export class DocumentsService {
     private documentsRepository: Repository<Document>,
     @InjectRepository(Collection)
     private collectionsRepository: Repository<Collection>,
+    @InjectRepository(Chunk)
+    private chunksRepository: Repository<Chunk>,
     private fileProcessingQueue: FileProcessingQueueService,
   ) {}
 
@@ -190,21 +193,16 @@ export class DocumentsService {
   }
 
   async toggleActive(id: string, isActive: boolean): Promise<DocumentResponseDto> {
-    // Mock implementation - return updated test data
-    const mockDocument: DocumentResponseDto = {
-      id,
-      collectionId: '123e4567-e89b-12d3-a456-426614174000',
-      originalFilename: 'annual-report-2024.pdf',
-      fileType: 'pdf',
-      fileSize: 2048576,
-      status: 'completed',
-      metadata: { tags: ['finance', 'annual'], folder: '/reports' },
-      isActive,
-      createdAt: '2024-01-15T10:00:00.000Z',
-      updatedAt: new Date().toISOString(),
-    };
+    const document = await this.documentsRepository.findOne({ where: { id } });
 
-    return mockDocument;
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    document.isActive = isActive;
+    await this.documentsRepository.save(document);
+
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {
@@ -216,11 +214,15 @@ export class DocumentsService {
       throw new NotFoundException('Document not found');
     }
 
+    // First, delete all chunks (including their embeddings) for this document
+    await this.chunksRepository.delete({ documentId: id });
+
+    // Then delete the document itself
     await this.documentsRepository.delete(id);
   }
 
   async reprocessDocument(id: string): Promise<{ documentId: string; status: string; message: string }> {
-    // Знайти документ
+    // Find document
     const document = await this.documentsRepository.findOne({
       where: { id },
     });
@@ -234,7 +236,7 @@ export class DocumentsService {
     }
 
     try {
-      // Скинути статус обробки
+      // Reset processing status
       const updatedMetadata = {
         ...document.metadata,
         status: 'reprocessing',
@@ -247,7 +249,7 @@ export class DocumentsService {
         updatedAt: new Date(),
       });
 
-      // Створити фейковий Multer файл для обробки
+      // Create fake Multer file for processing
       const mockFile: Express.Multer.File = {
         fieldname: 'file',
         originalname: document.originalFilename,
@@ -261,7 +263,7 @@ export class DocumentsService {
         stream: null,
       };
 
-      // Додати в чергу обробки
+      // Add to processing queue
       await this.addToProcessingQueue(document, mockFile);
 
       return {
@@ -310,8 +312,8 @@ export class DocumentsService {
       console.log(`Added document ${document.id} to processing queue`);
     } catch (error) {
       console.error(`Error adding document ${document.id} to queue:`, error);
-      // Не викидаємо помилку, щоб не перервати завантаження файлу
-      // Файл збережеться, але не буде оброблено
+      // Don't throw error to avoid interrupting file upload
+      // File will be saved but not processed
     }
   }
 }

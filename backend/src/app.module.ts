@@ -10,6 +10,7 @@ import { CollectionsModule } from './collections/collections.module';
 import { DocumentsModule } from './documents/documents.module';
 import { ChatModule } from './chat/chat.module';
 import { SearchModule } from './search/search.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { SearchModule } from './search/search.module';
 
     DatabaseModule,
     CommonModule,
+    AiModule,
     CategoriesModule,
     CollectionsModule,
     DocumentsModule,

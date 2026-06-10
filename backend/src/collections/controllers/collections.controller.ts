@@ -59,6 +59,21 @@ export class CollectionsController {
     return this.collectionsService.findAll(pagination);
   }
 
+  @Get('active')
+  @ApiOperation({
+    summary: 'Get active collections',
+    description: 'Retrieves all active collections from active categories',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Active collections retrieved successfully',
+    type: [CollectionResponseDto],
+  })
+  async getActiveCollections(): Promise<{ data: CollectionResponseDto[] }> {
+    const collections = await this.collectionsService.getActiveCollections();
+    return { data: collections };
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get collection by ID',

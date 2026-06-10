@@ -1,6 +1,6 @@
 # RAG Service
 
-Production-ready RAG service for adding context from private documents to AI agents.
+RAG service for adding context from private documents to AI agents.
 
 ## Features
 

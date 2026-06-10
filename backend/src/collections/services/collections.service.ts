@@ -215,4 +215,24 @@ export class CollectionsService {
       },
     };
   }
+
+  async getActiveCollections(): Promise<CollectionResponseDto[]> {
+    const collections = await this.collectionsRepository.find({
+      where: {
+        isActive: true,
+        category: {
+          isActive: true,
+        },
+      },
+      relations: ['category', 'documents'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return collections.map(collection =>
+      plainToClass(CollectionResponseDto, {
+        ...collection,
+        documentsCount: collection.documents?.length || 0,
+      }),
+    );
+  }
 }

@@ -7,7 +7,7 @@ export class ChunkingService {
   private readonly overlapTokens: number = 50; // Overlap between chunks
 
   /**
-   * Розділяє текст на чанки з заданою кількістю токенів
+   * Splits text into chunks with a specified number of tokens
    */
   chunkText(text: string): ChunkData[] {
     if (!text || text.trim().length === 0) {
@@ -25,7 +25,7 @@ export class ChunkingService {
       const sentence = sentences[i];
       const sentenceTokens = this.estimateTokens(sentence);
 
-      // Якщо додавання речення перевищить ліміт, зберігаємо поточний чанк
+      // If adding sentence exceeds limit, save current chunk
       if (currentTokens + sentenceTokens > this.maxTokensPerChunk && currentChunk.length > 0) {
         chunks.push({
           text: currentChunk.trim(),
@@ -34,13 +34,13 @@ export class ChunkingService {
           endIndex: text.indexOf(currentChunk) + currentChunk.length
         });
 
-        // Створюємо overlap для наступного чанка
+        // Create overlap for the next chunk
         const overlapText = this.createOverlap(currentChunk);
         currentChunk = overlapText + sentence;
         currentTokens = this.estimateTokens(currentChunk);
         startIndex = text.indexOf(currentChunk);
       } else {
-        // Додаємо речення до поточного чанка
+        // Add sentence to current chunk
         if (currentChunk.length === 0) {
           currentChunk = sentence;
           startIndex = text.indexOf(sentence);
@@ -50,7 +50,7 @@ export class ChunkingService {
         currentTokens += sentenceTokens;
       }
 
-      // Якщо речення саме по собі більше ліміту, розділяємо його
+      // If sentence itself exceeds limit, split it
       if (sentenceTokens > this.maxTokensPerChunk) {
         const wordChunks = this.chunkByWords(sentence);
         for (const wordChunk of wordChunks) {
@@ -66,7 +66,7 @@ export class ChunkingService {
       }
     }
 
-    // Додаємо останній чанк якщо він не пустий
+    // Add last chunk if it's not empty
     if (currentChunk.trim().length > 0) {
       chunks.push({
         text: currentChunk.trim(),
@@ -80,10 +80,10 @@ export class ChunkingService {
   }
 
   /**
-   * Розділяє текст на речення
+   * Splits text into sentences
    */
   private splitIntoSentences(text: string): string[] {
-    // Простий розділ на речення за крапкою, знаком питання та оклику
+    // Simple sentence split by period, question mark and exclamation mark
     return text
       .split(/[.!?]+/)
       .map(sentence => sentence.trim())
@@ -91,21 +91,21 @@ export class ChunkingService {
   }
 
   /**
-   * Оцінює кількість токенів у тексті
-   * Приблизна формула: 1 токен ≈ 0.75 слова ≈ 4 символи
+   * Estimates the number of tokens in text
+   * Approximate formula: 1 token ≈ 0.75 words ≈ 4 characters
    */
   private estimateTokens(text: string): number {
     if (!text) return 0;
 
-    // Підраховуємо слова
+    // Count words
     const words = text.split(/\s+/).filter(word => word.length > 0);
 
-    // 1 токен ≈ 0.75 слова
+    // 1 token ≈ 0.75 words
     return Math.ceil(words.length / 0.75);
   }
 
   /**
-   * Створює overlap для наступного чанка
+   * Creates overlap for the next chunk
    */
   private createOverlap(chunk: string): string {
     const words = chunk.split(/\s+/);
@@ -117,7 +117,7 @@ export class ChunkingService {
   }
 
   /**
-   * Розділяє довге речення на чанки за словами
+   * Splits long sentence into chunks by words
    */
   private chunkByWords(sentence: string): ChunkData[] {
     const words = sentence.split(/\s+/);
@@ -133,7 +133,7 @@ export class ChunkingService {
         chunks.push({
           text: currentChunk.trim(),
           tokens: currentTokens,
-          startIndex: 0, // Буде перераховано пізніше
+          startIndex: 0, // Will be recalculated later
           endIndex: 0
         });
 
@@ -158,7 +158,7 @@ export class ChunkingService {
   }
 
   /**
-   * Витягує текст з різних типів файлів
+   * Extracts text from different file types
    */
   extractTextFromFile(fileBuffer: Buffer, mimeType: string, filename: string): string {
     try {
@@ -169,12 +169,12 @@ export class ChunkingService {
           return fileBuffer.toString('utf-8');
 
         case 'application/pdf':
-          // TODO: Реалізувати PDF parsing коли додамо pdf-parse
+          // TODO: Implement PDF parsing when we add pdf-parse
           return '[PDF parsing not implemented yet]';
 
         case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
         case 'application/msword':
-          // TODO: Реалізувати DOCX parsing
+          // TODO: Implement DOCX parsing
           return '[DOCX parsing not implemented yet]';
 
         default:
