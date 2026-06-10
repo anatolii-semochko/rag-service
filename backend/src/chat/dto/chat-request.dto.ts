@@ -67,4 +67,28 @@ export class ChatRequestDto {
   @IsOptional()
   @IsEnum(RetrievalMode)
   retrievalMode?: RetrievalMode;
+
+  @ApiPropertyOptional({
+    description: 'Weight for vector similarity in hybrid search (0.0 to 1.0)',
+    example: 0.7,
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  vectorWeight?: number;
+
+  @ApiPropertyOptional({
+    description: 'Weight for keyword matching in hybrid search (0.0 to 1.0)',
+    example: 0.3,
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  keywordWeight?: number;
 }

@@ -17,7 +17,8 @@ export class ChatTab extends BaseComponent {
       temperature: 0.7,
       context: '',
       currentMessage: '',
-      useRAG: true
+      useRAG: true,
+      loadingHistory: false
     };
 
     this.initializeData();
@@ -36,9 +37,87 @@ export class ChatTab extends BaseComponent {
         collections,
         selectedCollections
       });
+
+      // Перевіряємо чи є sessionId в localStorage та завантажуємо історію
+      await this.loadChatHistory();
     } catch (error) {
       console.error('Failed to load collections:', error);
     }
+  }
+
+  async loadChatHistory() {
+    try {
+      // Спробуємо завантажити останню сесію з localStorage
+      const storedSessionId = localStorage.getItem('chatSessionId');
+
+      if (storedSessionId) {
+        this.state.loadingHistory = true;
+        this.updateHistoryLoadingState();
+
+        const historyResponse = await chatService.getChatHistory(storedSessionId);
+        const messages = historyResponse.data || [];
+
+        // Перевіряємо чи сесія дійсно існує (чи є повідомлення)
+        if (messages.length > 0) {
+          this.state.sessionId = storedSessionId;
+          this.state.messages = messages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.createdAt,
+            context: msg.metadata?.contextSources ?
+              msg.metadata.contextSources.map(source => ({ documentName: source, relevance: 0.8 })) : []
+          }));
+          this.state.loadingHistory = false;
+
+          // Manually render all messages to DOM
+          this.renderMessagesToDOM();
+          this.scrollToBottom();
+        } else {
+          // Сесія порожня, видаляємо з localStorage
+          localStorage.removeItem('chatSessionId');
+          this.state.loadingHistory = false;
+          this.updateHistoryLoadingState();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+      localStorage.removeItem('chatSessionId');
+      this.state.loadingHistory = false;
+      this.updateHistoryLoadingState();
+    }
+  }
+
+  updateHistoryLoadingState() {
+    const messagesContainer = this.$('#chatMessages');
+    if (!messagesContainer) return;
+
+    if (this.state.loadingHistory) {
+      messagesContainer.innerHTML = `
+        <div class="chat-loading">
+          <span class="loading-spinner"></span>
+          Loading chat history...
+        </div>
+      `;
+    } else if (this.state.messages.length === 0) {
+      messagesContainer.innerHTML = this.renderEmptyState();
+    }
+  }
+
+  renderMessagesToDOM() {
+    const messagesContainer = this.$('#chatMessages');
+    if (!messagesContainer) return;
+
+    messagesContainer.innerHTML = '';
+    this.state.messages.forEach(message => {
+      const messageElement = document.createElement('div');
+      messageElement.className = `chat-message ${message.role}`;
+      messageElement.innerHTML = `
+        <div class="message-content">${this.escapeHtml(message.content)}</div>
+        ${this.renderMessageSources(message)}
+        ${message.timestamp ? `<div class="message-timestamp">${this.formatTimeAgo(message.timestamp)}</div>` : ''}
+      `;
+      messagesContainer.appendChild(messageElement);
+    });
   }
 
   template() {
@@ -46,6 +125,23 @@ export class ChatTab extends BaseComponent {
       <div class="chat-container">
         <div class="chat-header">
           <h3 class="chat-title">💬 RAG Chat</h3>
+          <div class="chat-actions">
+            <button
+              class="btn-secondary btn-small"
+              onclick="window.app.startNewChat()"
+              title="Start new chat session"
+            >
+              🆕 New Chat
+            </button>
+            <button
+              class="btn-secondary btn-small"
+              onclick="window.app.clearChat()"
+              title="Clear current chat history"
+              ${this.state.messages.length === 0 ? 'disabled' : ''}
+            >
+              🗑️ Clear
+            </button>
+          </div>
         </div>
 
         <div class="chat-body">
@@ -82,6 +178,15 @@ export class ChatTab extends BaseComponent {
   }
 
   renderMessages() {
+    if (this.state.loadingHistory) {
+      return `
+        <div class="chat-loading">
+          <span class="loading-spinner"></span>
+          Loading chat history...
+        </div>
+      `;
+    }
+
     if (this.state.loading && this.state.messages.length === 0) {
       return `
         <div class="chat-loading">
@@ -196,6 +301,8 @@ export class ChatTab extends BaseComponent {
           <div><strong>Selected Collections:</strong> ${this.state.selectedCollections.length}</div>
           <div><strong>Available Collections:</strong> ${this.state.collections.length}</div>
           <div><strong>Session ID:</strong> ${this.state.sessionId || 'None'}</div>
+          <div><strong>Session Saved:</strong> ${this.state.sessionId ? 'Yes' : 'No'}</div>
+          ${this.state.sessionId ? '<div class="session-note">💾 Chat history will be restored on page reload</div>' : ''}
         </div>
       </div>
     `;
@@ -256,12 +363,17 @@ export class ChatTab extends BaseComponent {
       timestamp: new Date().toISOString()
     };
 
-    this.setState({
-      messages: [...this.state.messages, userMessage],
-      loading: true
-    });
+    // Update state without triggering re-render
+    this.state.messages.push(userMessage);
+    this.state.loading = true;
+
+    // Manually add user message to DOM
+    this.addMessageToDOM(userMessage);
+    this.updateLoadingState();
+    this.scrollToBottom();
 
     messageInput.value = '';
+    messageInput.focus();
 
     try {
       const response = await chatService.sendMessage(message, {
@@ -279,13 +391,29 @@ export class ChatTab extends BaseComponent {
         context: response.context || []
       };
 
-      this.setState({
-        messages: [...this.state.messages, assistantMessage],
-        sessionId: response.sessionId || this.state.sessionId,
-        loading: false
-      });
+      const newSessionId = response.sessionId || this.state.sessionId;
+
+      // Update state without triggering re-render
+      this.state.messages.push(assistantMessage);
+      this.state.sessionId = newSessionId;
+      this.state.loading = false;
+
+      // Зберігаємо sessionId в localStorage для збереження сесії
+      if (newSessionId) {
+        localStorage.setItem('chatSessionId', newSessionId);
+      }
+
+      // Manually add assistant message to DOM
+      this.addMessageToDOM(assistantMessage);
+      this.updateLoadingState();
 
       this.scrollToBottom();
+
+      // Return focus to input field
+      const messageInput = this.$('#messageInput');
+      if (messageInput) {
+        messageInput.focus();
+      }
     } catch (error) {
       console.error('Chat error:', error);
 
@@ -296,11 +424,71 @@ export class ChatTab extends BaseComponent {
         context: []
       };
 
-      this.setState({
-        messages: [...this.state.messages, errorMessage],
-        loading: false
-      });
+      // Update state without triggering re-render
+      this.state.messages.push(errorMessage);
+      this.state.loading = false;
+
+      // Manually add error message to DOM
+      this.addMessageToDOM(errorMessage);
+      this.updateLoadingState();
+
+      // Return focus to input field
+      const messageInput = this.$('#messageInput');
+      if (messageInput) {
+        messageInput.focus();
+      }
     }
+  }
+
+  addMessageToDOM(message) {
+    const messagesContainer = this.$('#chatMessages');
+    if (!messagesContainer) return;
+
+    const messageElement = document.createElement('div');
+    messageElement.className = `chat-message ${message.role}`;
+    messageElement.innerHTML = `
+      <div class="message-content">${this.escapeHtml(message.content)}</div>
+      ${this.renderMessageSources(message)}
+      ${message.timestamp ? `<div class="message-timestamp">${this.formatTimeAgo(message.timestamp)}</div>` : ''}
+    `;
+
+    messagesContainer.appendChild(messageElement);
+  }
+
+  updateLoadingState() {
+    const sendButton = this.$('.chat-send-button');
+    const messageInput = this.$('#messageInput');
+
+    if (sendButton) {
+      sendButton.textContent = this.state.loading ? '⏳ Sending...' : '📤 Send';
+      sendButton.disabled = this.state.loading;
+    }
+
+    if (messageInput) {
+      messageInput.disabled = this.state.loading;
+    }
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  formatTimeAgo(timestamp) {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffInMs = now - time;
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+
+    if (diffInMinutes < 1) return 'just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays}d ago`;
   }
 
   toggleChatSettings() {
@@ -399,18 +587,41 @@ export class ChatTab extends BaseComponent {
   clearChat() {
     if (this.state.messages.length > 0) {
       if (confirm('Are you sure you want to clear the chat history?')) {
-        this.setState({
-          messages: [],
-          sessionId: null
-        });
+        localStorage.removeItem('chatSessionId');
+        this.state.messages = [];
+        this.state.sessionId = null;
+
+        // Clear DOM
+        const messagesContainer = this.$('#chatMessages');
+        if (messagesContainer) {
+          messagesContainer.innerHTML = this.renderEmptyState();
+        }
       }
     }
   }
 
   startNewChat() {
-    this.setState({
-      messages: [],
-      sessionId: null
-    });
+    localStorage.removeItem('chatSessionId');
+    this.state.messages = [];
+    this.state.sessionId = null;
+
+    // Clear DOM
+    const messagesContainer = this.$('#chatMessages');
+    if (messagesContainer) {
+      messagesContainer.innerHTML = this.renderEmptyState();
+    }
+  }
+
+  renderEmptyState() {
+    return `
+      <div class="chat-empty">
+        <div class="chat-empty-icon">💬</div>
+        <div class="chat-empty-text">Start a conversation</div>
+        <div class="chat-empty-subtext">
+          I can help you find information from your uploaded documents.<br>
+          Ask me anything about your documents...
+        </div>
+      </div>
+    `;
   }
 }

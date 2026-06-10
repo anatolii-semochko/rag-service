@@ -137,7 +137,11 @@ export class ChatService extends BaseService {
       sessionId: options.sessionId || null,
       collectionIds: options.collectionIds || [],
       context: options.context || '',
-      temperature: options.temperature || 0.7
+      temperature: options.temperature || 0.7,
+      useRAG: options.useRAG !== undefined ? options.useRAG : true,
+      retrievalMode: options.retrievalMode || 'hybrid',
+      vectorWeight: options.vectorWeight || 0.7,
+      keywordWeight: options.keywordWeight || 0.3
     };
 
     return this.client.post('/chat', payload);

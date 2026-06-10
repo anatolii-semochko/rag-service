@@ -41,6 +41,8 @@ export class ChatService {
             threshold: 0.7,
             collectionIds: chatRequest.collectionIds,
             temperature: chatRequest.temperature,
+            vectorWeight: chatRequest.vectorWeight,
+            keywordWeight: chatRequest.keywordWeight,
           }
         );
 
