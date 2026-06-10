@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsArray, IsUUID, MinLength, IsNumber, IsBoolean, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsUUID, MinLength, IsNumber, IsBoolean, Min, Max, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { RetrievalMode } from '../../rag/retrieval/enums/retrieval-mode.enum';
 
 export class ChatRequestDto {
   @ApiProperty({
@@ -57,4 +58,13 @@ export class ChatRequestDto {
   @IsOptional()
   @IsBoolean()
   useRAG?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Retrieval strategy mode',
+    enum: RetrievalMode,
+    example: RetrievalMode.HYBRID,
+  })
+  @IsOptional()
+  @IsEnum(RetrievalMode)
+  retrievalMode?: RetrievalMode;
 }

@@ -6,8 +6,9 @@ import { ChatMessage } from '../entities/chat-message.entity';
 import { ChatRequestDto } from '../dto/chat-request.dto';
 import { ChatResponseDto, ChatContextDto } from '../dto/chat-response.dto';
 import { SearchService } from '../../search/services/search.service';
-import { VectorStorageService } from '../../ai/services/vector-storage.service';
 import { OpenAIProvider } from '../../ai/providers/openai.provider';
+import { RetrievalService } from '../../rag/retrieval/services/retrieval.service';
+import { RetrievalMode } from '../../rag/retrieval/enums/retrieval-mode.enum';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -18,7 +19,7 @@ export class ChatService {
     @InjectRepository(ChatMessage)
     private chatMessagesRepository: Repository<ChatMessage>,
     private searchService: SearchService,
-    private vectorStorageService: VectorStorageService,
+    private retrievalService: RetrievalService,
     private openAIProvider: OpenAIProvider,
   ) {}
 
@@ -26,24 +27,36 @@ export class ChatService {
     const sessionId = chatRequest.sessionId || uuidv4();
 
     try {
-      // 1. Create embedding for user message
-      const queryEmbedding = await this.openAIProvider.embeddings(chatRequest.message);
+      let context: ChatContextDto[] = [];
 
-      // 2. Search similar chunks using vector search
-      const searchResults = await this.vectorStorageService.searchSimilar(
-        queryEmbedding,
-        5, // limit to top 5 most relevant chunks
-        0.7, // similarity threshold
-        chatRequest.collectionIds?.[0] // optional collection filtering
-      );
+      // 1. Use retrieval only if useRAG is enabled
+      if (chatRequest.useRAG !== false) {
+        // 2. Use new RetrievalService with specified mode
+        const retrievalMode = chatRequest.retrievalMode || RetrievalMode.HYBRID;
+        const retrievalResult = await this.retrievalService.retrieve(
+          chatRequest.message,
+          {
+            mode: retrievalMode,
+            limit: 5,
+            threshold: 0.7,
+            collectionIds: chatRequest.collectionIds,
+            temperature: chatRequest.temperature,
+          }
+        );
 
-      // 3. Convert search results to context format
-      const context: ChatContextDto[] = searchResults.map(result => ({
-        documentId: result.document?.id || result.chunk.documentId,
-        documentName: result.document?.filename || 'Document',
-        content: result.chunk.content,
-        relevance: result.similarity,
-      }));
+        // 3. Convert retrieval results to context format
+        context = retrievalResult.chunks.map(chunk => ({
+          documentId: chunk.documentId,
+          documentName: chunk.documentName,
+          content: chunk.content,
+          relevance: chunk.score,
+          metadata: {
+            vectorScore: chunk.metadata?.vectorScore,
+            keywordScore: chunk.metadata?.keywordScore,
+            mode: retrievalResult.metadata?.mode,
+          },
+        }));
+      }
 
       // 4. Get session history for context
       const recentMessages = await this.getRecentSessionMessages(sessionId, 5);
@@ -54,7 +67,8 @@ export class ChatService {
         chatRequest.message,
         context,
         conversationContext,
-        chatRequest.context
+        chatRequest.context,
+        chatRequest.temperature
       );
 
       // 6. Save user message and AI response to database
@@ -116,7 +130,8 @@ export class ChatService {
     userMessage: string,
     context: ChatContextDto[],
     conversationContext: string,
-    additionalContext?: string
+    additionalContext?: string,
+    temperature?: number
   ): Promise<string> {
     try {
       // Build context string from retrieved documents
@@ -146,7 +161,7 @@ Instructions:
       const response = await this.openAIProvider.chat([
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
-      ]);
+      ], temperature || 0.7);
 
       return response;
     } catch (error) {
