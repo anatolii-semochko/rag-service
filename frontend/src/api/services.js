@@ -138,10 +138,14 @@ export class ChatService extends BaseService {
       collectionIds: options.collectionIds || [],
       context: options.context || '',
       temperature: options.temperature || 0.7,
-      useRAG: options.useRAG !== undefined ? options.useRAG : true,
-      retrievalMode: options.retrievalMode || 'hybrid',
+      ragMode: options.ragMode || 'all',
+      selectedCategories: options.selectedCategories || [],
+      strategies: options.strategies || ['hybrid'],
+      retrievalMode: options.retrievalMode || 'hybrid', // deprecated but kept for backward compatibility
       vectorWeight: options.vectorWeight || 0.7,
-      keywordWeight: options.keywordWeight || 0.3
+      keywordWeight: options.keywordWeight || 0.3,
+      trace: options.trace || false,
+      dryRun: options.dryRun || false
     };
 
     return this.client.post('/chat', payload);

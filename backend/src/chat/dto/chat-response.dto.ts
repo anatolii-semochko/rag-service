@@ -50,4 +50,9 @@ export class ChatResponseDto {
     example: '2024-06-06T10:00:00.000Z',
   })
   timestamp: string;
+
+  @ApiPropertyOptional({
+    description: 'RAG process trace data (only when trace=true)',
+  })
+  trace?: any;
 }

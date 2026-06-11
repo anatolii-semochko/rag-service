@@ -3,13 +3,17 @@ import { BaseComponent } from './components/common/BaseComponent.js';
 import { ChatTab } from './components/tabs/ChatTab.js';
 import { DocumentsTab } from './components/tabs/DocumentsTab.js';
 import { storage } from './utils/helpers.js';
+import { SessionManager, AppStorage } from './utils/cookies.js';
 
 export class App extends BaseComponent {
   constructor() {
     super();
 
+    // Migrate existing localStorage data to cookies
+    AppStorage.migrateFromLocalStorage();
+
     this.state = {
-      activeTab: 'chat',
+      activeTab: SessionManager.getActiveTab() || 'documents', // Load from cookies
       loading: false
     };
 
@@ -39,7 +43,13 @@ export class App extends BaseComponent {
       updateTemperature: (value) => this.tabs.chat?.updateTemperature(value),
       updateContext: (value) => this.tabs.chat?.updateContext(value),
       toggleRAG: (newValue) => this.tabs.chat?.toggleRAG(newValue),
+      updateUseRAG: (mode) => this.tabs.chat?.updateUseRAG(mode),
+      toggleCategory: (categoryId, checked) => this.tabs.chat?.toggleCategory(categoryId, checked),
+      toggleStrategy: (strategy, checked) => this.tabs.chat?.toggleStrategy(strategy, checked),
+      toggleTrace: (newValue) => this.tabs.chat?.toggleTrace(newValue),
+      toggleDryRun: (newValue) => this.tabs.chat?.toggleDryRun(newValue),
       toggleSources: (element) => this.tabs.chat?.toggleSources(element),
+      toggleTraceDisplay: (element) => this.tabs.chat?.toggleTraceDisplay(element),
       clearChat: () => this.tabs.chat?.clearChat(),
       startNewChat: () => this.tabs.chat?.startNewChat(),
 
@@ -67,12 +77,6 @@ export class App extends BaseComponent {
   }
 
   async init() {
-    // Load saved active tab
-    const savedTab = storage.get('activeTab');
-    if (savedTab && ['chat', 'documents', 'audit'].includes(savedTab)) {
-      this.state.activeTab = savedTab;
-    }
-
     this.render();
     await this.initializeTabs();
   }
@@ -212,8 +216,8 @@ export class App extends BaseComponent {
     // Update state
     this.setState({ activeTab: tabId });
 
-    // Save to storage
-    storage.set('activeTab', tabId);
+    // Save to cookies
+    SessionManager.setActiveTab(tabId);
 
     // Load new tab
     await this.loadActiveTab();

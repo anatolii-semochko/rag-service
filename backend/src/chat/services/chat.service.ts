@@ -5,10 +5,12 @@ import { ChatSession } from '../entities/chat-session.entity';
 import { ChatMessage } from '../entities/chat-message.entity';
 import { ChatRequestDto } from '../dto/chat-request.dto';
 import { ChatResponseDto, ChatContextDto } from '../dto/chat-response.dto';
+import { RagMode } from '../dto/enums/rag-mode.enum';
 import { SearchService } from '../../search/services/search.service';
 import { OpenAIProvider } from '../../ai/providers/openai.provider';
 import { RetrievalService } from '../../rag/retrieval/services/retrieval.service';
 import { RetrievalMode } from '../../rag/retrieval/enums/retrieval-mode.enum';
+import { ChatTraceService } from './chat-trace.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -25,12 +27,19 @@ export class ChatService {
 
   async chat(chatRequest: ChatRequestDto): Promise<ChatResponseDto> {
     const sessionId = chatRequest.sessionId || uuidv4();
+    const trace = ChatTraceService.create(chatRequest.trace || false);
+
+    trace.initialize(chatRequest.message, sessionId);
 
     try {
       let context: ChatContextDto[] = [];
+      let aiResponse = null;
 
       // 1. Use retrieval only if useRAG is enabled
-      if (chatRequest.useRAG !== false) {
+      const shouldUseRAG = chatRequest.ragMode && chatRequest.ragMode !== 'none';
+      if (shouldUseRAG) {
+        trace.addStep('retrieval_start', { ragMode: chatRequest.ragMode, strategies: chatRequest.strategies });
+
         // 2. Use new RetrievalService with specified mode
         const retrievalMode = chatRequest.retrievalMode || RetrievalMode.HYBRID;
         const retrievalResult = await this.retrievalService.retrieve(
@@ -43,8 +52,15 @@ export class ChatService {
             temperature: chatRequest.temperature,
             vectorWeight: chatRequest.vectorWeight,
             keywordWeight: chatRequest.keywordWeight,
-          }
+          },
+          trace // Pass trace to retrieval service
         );
+
+        trace.addStep('retrieval_complete', {
+          mode: retrievalMode,
+          chunksFound: retrievalResult.chunks.length,
+          totalScore: retrievalResult.chunks.reduce((sum, chunk) => sum + chunk.score, 0) / retrievalResult.chunks.length
+        });
 
         // 3. Convert retrieval results to context format
         context = retrievalResult.chunks.map(chunk => ({
@@ -58,35 +74,54 @@ export class ChatService {
             mode: retrievalResult.metadata?.mode,
           },
         }));
+
+        trace.setFinalContext(context);
+      } else {
+        trace.addStep('retrieval_skipped', { useRAG: false });
       }
 
       // 4. Get session history for context
+      trace.addStep('conversation_history_start', {});
       const recentMessages = await this.getRecentSessionMessages(sessionId, 5);
       const conversationContext = this.formatConversationContext(recentMessages);
+      trace.addStep('conversation_history_complete', { messagesCount: recentMessages.length });
 
-      // 5. Generate response using OpenAI
-      const aiResponse = await this.generateAIResponse(
-        chatRequest.message,
-        context,
-        conversationContext,
-        chatRequest.context,
-        chatRequest.temperature
-      );
+      // 5. Generate response using OpenAI (only if not dryRun)
+      if (!chatRequest.dryRun) {
+        trace.addStep('llm_generation_start', { dryRun: false });
 
-      // 6. Save user message and AI response to database
-      await this.saveMessage(sessionId, 'user', chatRequest.message);
-      await this.saveMessage(sessionId, 'assistant', aiResponse, context);
+        aiResponse = await this.generateAIResponse(
+          chatRequest.message,
+          context,
+          conversationContext,
+          chatRequest.context,
+          chatRequest.temperature,
+          trace
+        );
+
+        trace.addStep('llm_generation_complete', { responseLength: aiResponse?.length || 0 });
+        trace.setLLMResponse(aiResponse);
+
+        // 6. Save user message and AI response to database
+        await this.saveMessage(sessionId, 'user', chatRequest.message);
+        await this.saveMessage(sessionId, 'assistant', aiResponse, context);
+      } else {
+        trace.addStep('llm_generation_skipped', { dryRun: true });
+        aiResponse = null;
+      }
 
       const response: ChatResponseDto = {
-        response: aiResponse,
+        response: aiResponse || 'Dry run mode - LLM request skipped',
         sessionId,
         context,
         timestamp: new Date().toISOString(),
+        trace: trace.finalize(),
       };
 
       return response;
     } catch (error) {
       console.error('Error in chat service:', error);
+      trace.setError(error.message);
 
       // Fallback response
       return {
@@ -94,6 +129,7 @@ export class ChatService {
         sessionId,
         context: [],
         timestamp: new Date().toISOString(),
+        trace: trace.finalize(),
       };
     }
   }
@@ -133,9 +169,18 @@ export class ChatService {
     context: ChatContextDto[],
     conversationContext: string,
     additionalContext?: string,
-    temperature?: number
+    temperature?: number,
+    trace?: ChatTraceService
   ): Promise<string> {
     try {
+      if (trace) {
+        trace.addStep('prompt_construction_start', {
+          contextChunks: context.length,
+          conversationMessages: conversationContext ? conversationContext.split('\n').length - 1 : 0,
+          hasAdditionalContext: !!additionalContext
+        });
+      }
+
       // Build context string from retrieved documents
       const contextString = context.length > 0
         ? context.map(ctx => `Document: ${ctx.documentName}\nContent: ${ctx.content}\nRelevance: ${ctx.relevance}\n`).join('\n')
@@ -159,6 +204,15 @@ Instructions:
 - Be concise but comprehensive
 - If you reference information, mention which document it came from
 - Maintain a helpful and professional tone`;
+
+      if (trace) {
+        trace.addStep('prompt_construction_complete', {
+          systemPromptLength: systemPrompt.length,
+          userMessageLength: userMessage.length,
+          temperature: temperature || 0.7
+        });
+        trace.setGeneratedPrompt(systemPrompt);
+      }
 
       const response = await this.openAIProvider.chat([
         { role: 'system', content: systemPrompt },
