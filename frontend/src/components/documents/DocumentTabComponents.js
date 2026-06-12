@@ -146,7 +146,7 @@ export class DocumentTabComponents {
         <tr class="file-row">
           <td width="90"></td>
           <td>
-            <span class="file-name">${fileIcon} ${stringUtils.escapeHtml(fileName)}</span>
+            <span class="file-name" onclick="window.app.previewFile('${file.id}', '${stringUtils.escapeHtml(fileName)}')" title="Click to preview file">${fileIcon} ${stringUtils.escapeHtml(fileName)}</span>
           </td>
           <td class="count-cell">${sizeFormatted}</td>
           <td class="status-cell">
