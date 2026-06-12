@@ -52,6 +52,12 @@ export class ChatResponseDto {
   timestamp: string;
 
   @ApiPropertyOptional({
+    description: 'Brief summary of this conversation turn for session context',
+    example: 'User asked about Q4 financial metrics, provided revenue increase data',
+  })
+  summary?: string;
+
+  @ApiPropertyOptional({
     description: 'RAG process trace data (only when trace=true)',
   })
   trace?: any;
