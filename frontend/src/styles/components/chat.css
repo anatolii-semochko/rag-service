@@ -1,33 +1,4 @@
 /* Chat Component Styles */
-
-.chat-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  max-height: 80vh;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--color-border-primary);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-}
-
-.chat-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-md);
-  border-bottom: 1px solid var(--color-border-primary);
-  background: var(--color-bg-secondary);
-}
-
-.chat-title {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-}
-
 .chat-settings-toggle {
   padding: var(--space-sm) var(--space-md);
   background: var(--color-primary);
@@ -47,6 +18,7 @@
 .chat-body {
   display: flex;
   flex: 1;
+  height: inherit;
   overflow: hidden;
 }
 
@@ -61,7 +33,6 @@
   overflow-y: auto;
   padding: var(--space-md);
   background: var(--color-bg-primary);
-  max-height: 500px;
 }
 
 .chat-message {
@@ -175,6 +146,7 @@
   padding: var(--space-md);
   background: var(--color-bg-secondary);
   border-top: 1px solid var(--color-border-primary);
+  overflow-y: auto;
 }
 
 .chat-input-form {

@@ -145,7 +145,7 @@ export class App extends BaseComponent {
               </div>
             </nav>
 
-            <div class="tab-content">
+            <div class="tab-content" style="height: calc(100vh - 170px)">
               <div id="chatTab" class="tab-pane ${this.state.activeTab === 'chat' ? 'active' : ''}">
                 ${this.state.activeTab === 'chat' ? '' : ''}
               </div>

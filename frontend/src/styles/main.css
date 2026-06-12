@@ -5,6 +5,7 @@
 @import './base/variables.css';
 
 /* Component Styles */
+@import './components/container.css';
 @import './components/buttons.css';
 @import './components/chat.css';
 @import './components/documents.css';
@@ -12,6 +13,7 @@
 
 /* Layout Styles */
 .app {
+  width: 100%;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -27,17 +29,35 @@
   z-index: var(--z-sticky);
 }
 
-.container {
-  width: 90%;
-  margin: 0 auto;
-  padding: 0 var(--space-md);
-}
-
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-md) 0;
+  padding: var(--space-sm) 0 0 0;
+}
+
+.container {
+  margin: 0 auto;
+  padding: var(--space-sm) var(--space-md) var(--space-md) var(--space-md);
+}
+
+.container-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-md);
+}
+
+.container-header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.container-header-actions {
+  display: flex;
+  gap: var(--space-sm);
 }
 
 .brand {
@@ -100,13 +120,12 @@
 /* Main Content */
 .main {
   flex: 1;
-  padding: var(--space-xl) 0;
 }
 
 /* Tab Navigation */
 .tab-navigation {
   border-bottom: 1px solid var(--color-border-secondary);
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-md);
 }
 
 .tabs {
@@ -129,6 +148,10 @@
   transition: var(--transition-normal);
   text-decoration: none;
 }
+
+/*.tab-content {*/
+/*  height: inherit;*/
+/*}*/
 
 .tab:hover {
   color: var(--color-primary);
@@ -373,40 +396,3 @@
 .mt-sm { margin-top: var(--space-sm); }
 .mt-md { margin-top: var(--space-md); }
 .mt-lg { margin-top: var(--space-lg); }
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .container {
-    padding: 0 var(--space-sm);
-  }
-
-  .header-content {
-    padding: var(--space-sm) 0;
-  }
-
-  .brand-text h1 {
-    font-size: var(--font-size-lg);
-  }
-
-  .main {
-    padding: var(--space-lg) 0;
-  }
-
-  .tabs {
-    gap: var(--space-md);
-  }
-
-  .tab {
-    font-size: var(--font-size-xs);
-  }
-
-  .card-header,
-  .card-body {
-    padding: var(--space-md);
-  }
-
-  .modal {
-    margin: var(--space-sm);
-    max-width: none;
-  }
-}

@@ -54,10 +54,10 @@ export class DocumentsTab extends BaseComponent {
 
   template() {
     return `
-      <div class="documents-container">
-        <div class="documents-header">
+      <div style="height: inherit; overflow: auto;">
+        <div class="container-header">
           <h2>📄 Document Manager</h2>
-          <div class="header-actions">
+          <div class="container-header-actions">
             <button class="btn btn-primary" onclick="window.app.openCategoryModal()" title="Add Category">➕ New Category</button>
             <button class="btn btn-secondary" onclick="window.app.exportData()" title="Export Data">📥 Export</button>
             <button class="btn btn-ghost" onclick="window.app.reloadDocuments()" title="Reload Data">🔄 Reload</button>

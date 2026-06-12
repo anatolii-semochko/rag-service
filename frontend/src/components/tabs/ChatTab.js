@@ -134,19 +134,18 @@ export class ChatTab extends BaseComponent {
 
   template() {
     return `
-      <div class="chat-container">
-        <div class="chat-header">
-          <h3 class="chat-title">💬 RAG Chat</h3>
-          <div class="chat-actions">
+        <div class="container-header">
+          <h2>💬 RAG Chat</h2>
+          <div class="container-header-actions">
             <button
-              class="btn-secondary btn-small"
+              class="btn btn-primary"
               onclick="window.app.startNewChat()"
               title="Start new chat session"
             >
               🆕 New Chat
             </button>
             <button
-              class="btn-secondary btn-small"
+              class="btn btn-ghost"
               onclick="window.app.clearChat()"
               title="Clear current chat history"
               ${this.state.messages.length === 0 ? 'disabled' : ''}
@@ -156,7 +155,7 @@ export class ChatTab extends BaseComponent {
           </div>
         </div>
 
-        <div class="chat-body">
+        <div class="chat-body" style="height: calc(100vh - 215px)">
           <div class="chat-main">
             <div class="chat-messages" id="chatMessages">
               ${this.renderMessages()}
@@ -185,7 +184,6 @@ export class ChatTab extends BaseComponent {
             ${this.renderKnowledgeBaseSettings()}
           </div>
         </div>
-      </div>
     `;
   }
 
