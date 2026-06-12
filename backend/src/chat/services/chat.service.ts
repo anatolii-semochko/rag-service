@@ -34,6 +34,7 @@ export class ChatService {
     try {
       let context: ChatContextDto[] = [];
       let aiResponse = null;
+      let summary = null;
 
       // 1. Use retrieval only if useRAG is enabled
       const shouldUseRAG = chatRequest.ragMode && chatRequest.ragMode !== 'none';
@@ -90,7 +91,7 @@ export class ChatService {
       if (!chatRequest.dryRun) {
         trace.addStep('llm_generation_start', { dryRun: false });
 
-        aiResponse = await this.generateAIResponse(
+        const aiResult = await this.generateAIResponse(
           chatRequest.message,
           context,
           conversationContext,
@@ -99,7 +100,13 @@ export class ChatService {
           trace
         );
 
-        trace.addStep('llm_generation_complete', { responseLength: aiResponse?.length || 0 });
+        aiResponse = aiResult.answer;
+        summary = aiResult.summary;
+
+        trace.addStep('llm_generation_complete', {
+          responseLength: aiResponse?.length || 0,
+          summaryLength: summary?.length || 0
+        });
         trace.setLLMResponse(aiResponse);
 
         // 6. Save user message and AI response to database
@@ -115,6 +122,7 @@ export class ChatService {
         sessionId,
         context,
         timestamp: new Date().toISOString(),
+        summary: summary || 'Session interaction summary',
         trace: trace.finalize(),
       };
 
@@ -129,6 +137,7 @@ export class ChatService {
         sessionId,
         context: [],
         timestamp: new Date().toISOString(),
+        summary: 'Error occurred during request processing',
         trace: trace.finalize(),
       };
     }
@@ -171,7 +180,7 @@ export class ChatService {
     additionalContext?: string,
     temperature?: number,
     trace?: ChatTraceService
-  ): Promise<string> {
+  ): Promise<{answer: string, summary: string}> {
     try {
       if (trace) {
         trace.addStep('prompt_construction_start', {
@@ -203,7 +212,15 @@ Instructions:
 - Provide specific details and quotes when available
 - Be concise but comprehensive
 - If you reference information, mention which document it came from
-- Maintain a helpful and professional tone`;
+- Maintain a helpful and professional tone
+
+IMPORTANT: Your response must be in JSON format with two fields:
+{
+  "answer": "Your detailed response to the user's question",
+  "summary": "A brief 1-2 sentence summary of this conversation turn for session context (what the user asked about and key points of your response)"
+}
+
+The summary should help maintain conversation context for future interactions. Focus on the main topic and key information discussed.`;
 
       if (trace) {
         trace.addStep('prompt_construction_complete', {
@@ -214,15 +231,49 @@ Instructions:
         trace.setGeneratedPrompt(systemPrompt);
       }
 
-      const response = await this.openAIProvider.chat([
+      const rawResponse = await this.openAIProvider.chat([
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ], temperature || 0.7);
 
-      return response;
+      // Parse JSON response to extract answer and summary
+      try {
+        const parsedResponse = JSON.parse(rawResponse);
+        if (parsedResponse.answer && parsedResponse.summary) {
+          if (trace) {
+            trace.addStep('response_parsed', {
+              hasAnswer: !!parsedResponse.answer,
+              hasSummary: !!parsedResponse.summary,
+              summaryLength: parsedResponse.summary.length
+            });
+          }
+          return {
+            answer: parsedResponse.answer,
+            summary: parsedResponse.summary
+          };
+        }
+      } catch (parseError) {
+        console.warn('Failed to parse JSON response, using raw response:', parseError);
+        if (trace) {
+          trace.addStep('response_parse_failed', {
+            error: parseError.message,
+            rawResponseLength: rawResponse.length
+          });
+        }
+      }
+
+      // Fallback: generate basic summary from raw response
+      const fallbackSummary = `User asked: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`;
+      return {
+        answer: rawResponse,
+        summary: fallbackSummary
+      };
     } catch (error) {
       console.error('Error generating AI response:', error);
-      return 'I apologize, but I encountered an error while generating a response. Please try again.';
+      return {
+        answer: 'I apologize, but I encountered an error while generating a response. Please try again.',
+        summary: 'Error occurred during response generation'
+      };
     }
   }
 

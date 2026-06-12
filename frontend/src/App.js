@@ -54,7 +54,7 @@ export class App extends BaseComponent {
       startNewChat: () => this.tabs.chat?.startNewChat(),
 
       // Documents methods
-      toggleCategoryExpand: (categoryId) => this.tabs.documents?.toggleCategoryExpand(categoryId),
+      toggleCategoryExpand: (category) => this.tabs.documents?.toggleCategoryExpand(category),
       toggleCollectionExpand: (collectionId) => this.tabs.documents?.toggleCollectionExpand(collectionId),
       toggleCategoryActive: (id, active) => this.tabs.documents?.toggleCategoryActive(id, active),
       toggleCollectionActive: (id, active) => this.tabs.documents?.toggleCollectionActive(id, active),
