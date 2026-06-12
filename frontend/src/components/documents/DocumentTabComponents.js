@@ -98,7 +98,6 @@ export class DocumentTabComponents {
           <td class="status-cell">
             <span class="status-badge ${this.getProcessingStatus(collection).class}">${this.getProcessingStatus(collection).text}</span>
           </td>
-          </td>
           <td class="actions-cell">
             <button class="toggle-switch ${collection.isActive ? 'active' : 'inactive'} ${collection.isDisabled ? 'disabled-by-parent' : ''}" style="margin-right: 40px" onclick="window.app.toggleCollectionActive('${collection.id}', ${collection.isActive})" title="${collection.isDisabled ? 'Disabled (category inactive)' : (collection.isActive ? 'Deactivate' : 'Activate')}">
               <span class="switch-slider"></span>
@@ -158,6 +157,7 @@ export class DocumentTabComponents {
               <span class="switch-slider"></span>
             </button>
             <button class="btn-icon download-btn" onclick="window.app.downloadFile('${file.id}')" title="Download">📥</button>
+            <button class="btn-icon reprocess-btn" onclick="window.app.reprocessDocument('${file.id}')" title="Reprocess Document">🔄</button>
             <button class="btn-icon delete-btn" onclick="window.app.deleteFileWithConfirm('${file.id}', '${stringUtils.escapeHtml(fileName)}')" title="Delete">🗑️</button>
           </td>
         </tr>

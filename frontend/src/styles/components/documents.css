@@ -218,6 +218,16 @@
   color: var(--color-danger-dark);
 }
 
+.status-badge.ready {
+  background: var(--color-success-light);
+  color: var(--color-success-dark);
+}
+
+.status-badge.inactive {
+  background: var(--color-gray-light);
+  color: var(--color-gray-dark);
+}
+
 .actions-cell {
   text-align: right;
 }

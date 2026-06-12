@@ -145,7 +145,8 @@ export class ChatService extends BaseService {
       vectorWeight: options.vectorWeight || 0.7,
       keywordWeight: options.keywordWeight || 0.3,
       trace: options.trace || false,
-      dryRun: options.dryRun || false
+      dryRun: options.dryRun || false,
+      session: options.session || [] // Add session history
     };
 
     return this.client.post('/chat', payload);

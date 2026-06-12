@@ -3,6 +3,7 @@ import { BaseComponent } from '../common/BaseComponent.js';
 import { chatService, collectionsService, categoriesService } from '../../api/services.js';
 import { dateUtils, stringUtils } from '../../utils/helpers.js';
 import { SessionManager, ChatSettings } from '../../utils/cookies.js';
+import { Session } from '../../utils/Session.js';
 
 export class ChatTab extends BaseComponent {
   constructor() {
@@ -30,6 +31,9 @@ export class ChatTab extends BaseComponent {
       trace: chatSettings.trace,
       dryRun: chatSettings.dryRun
     };
+
+    // Initialize session
+    this.session = new Session();
 
     this.initializeData();
   }
@@ -480,13 +484,14 @@ export class ChatTab extends BaseComponent {
 
         <div class="chat-session-info">
           <div><strong>Messages:</strong> ${this.state.messages.length}</div>
+          <div><strong>Session History:</strong> ${this.session.size()} interactions</div>
           <div><strong>Use RAG:</strong> ${this.state.useRAG}</div>
           <div><strong>Selected Categories:</strong> ${this.state.selectedCategories.length}</div>
           <div><strong>Selected Strategies:</strong> ${this.state.strategies.join(', ')}</div>
           <div><strong>Available Categories:</strong> ${this.state.categories.length}</div>
           <div><strong>Session ID:</strong> ${this.state.sessionId || 'None'}</div>
-          <div><strong>Session Saved:</strong> ${this.state.sessionId ? 'Yes' : 'No'}</div>
-          ${this.state.sessionId ? '<div class="session-note">💾 Chat history will be restored on page reload</div>' : ''}
+          <div><strong>Session Saved:</strong> ${!this.session.isEmpty() ? 'Yes' : 'No'}</div>
+          ${!this.session.isEmpty() ? '<div class="session-note">💾 Session context available for next requests</div>' : ''}
         </div>
       </div>
     `;
@@ -619,7 +624,8 @@ export class ChatTab extends BaseComponent {
         temperature: this.state.temperature,
         useRAG: this.state.useRAG,
         trace: this.state.trace,
-        dryRun: this.state.dryRun
+        dryRun: this.state.dryRun,
+        session: this.session.get() // Add session history to request
       });
 
       const assistantMessage = {
@@ -636,6 +642,10 @@ export class ChatTab extends BaseComponent {
       this.state.messages.push(assistantMessage);
       this.state.sessionId = newSessionId;
       this.state.loading = false;
+
+      // Add to session with summary from LLM response
+      const summary = response.summary || `Assistant responded about: ${response.response.substring(0, 50)}${response.response.length > 50 ? '...' : ''}`;
+      this.session.add(message, summary);
 
       // Save sessionId to cookies for session persistence
       SessionManager.setSessionId(newSessionId);
@@ -902,6 +912,7 @@ export class ChatTab extends BaseComponent {
         SessionManager.clearSession();
         this.state.messages = [];
         this.state.sessionId = null;
+        this.session.clear(); // Clear session
 
         // Clear DOM
         const messagesContainer = this.$('#chatMessages');
@@ -916,6 +927,7 @@ export class ChatTab extends BaseComponent {
     SessionManager.clearSession();
     this.state.messages = [];
     this.state.sessionId = null;
+    this.session.clear(); // Clear session
 
     // Clear DOM
     const messagesContainer = this.$('#chatMessages');

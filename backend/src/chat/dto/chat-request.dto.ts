@@ -1,7 +1,9 @@
-import { IsString, IsOptional, IsArray, IsUUID, MinLength, IsNumber, IsBoolean, Min, Max, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsUUID, MinLength, IsNumber, IsBoolean, Min, Max, IsEnum, ValidateNested } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { RetrievalMode } from '../../rag/retrieval/enums/retrieval-mode.enum';
 import { RagMode } from './enums/rag-mode.enum';
+import { SessionMessageDto } from './session-message.dto';
 
 export class ChatRequestDto {
   @ApiProperty({
@@ -132,4 +134,19 @@ export class ChatRequestDto {
   @IsOptional()
   @IsBoolean()
   dryRun?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Session history for context-aware conversations',
+    example: [
+      { request: 'What is AI?', summary: 'User asked about AI definition' },
+      { request: 'How does it work?', summary: 'User followed up asking about AI mechanics' }
+    ],
+    isArray: true,
+    type: SessionMessageDto,
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SessionMessageDto)
+  session?: SessionMessageDto[];
 }
