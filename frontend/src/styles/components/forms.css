@@ -46,7 +46,7 @@
 /* Color Input */
 .form-color-input {
   position: relative;
-  display: inline-block;
+  display: block;
 }
 
 .form-control-color {
