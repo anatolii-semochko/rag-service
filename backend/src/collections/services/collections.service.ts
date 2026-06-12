@@ -48,7 +48,7 @@ export class CollectionsService {
 
     return plainToClass(CollectionResponseDto, {
       ...savedCollection,
-      documentsCount: 0,
+      documentsCount: savedCollection.documentsCount,
     });
   }
 
@@ -59,7 +59,7 @@ export class CollectionsService {
     const { page = 1, limit = 10 } = pagination;
 
     const [collections, total] = await this.collectionsRepository.findAndCount({
-      relations: ['category', 'documents'],
+      relations: ['category'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -68,7 +68,7 @@ export class CollectionsService {
     const data = collections.map(collection =>
       plainToClass(CollectionResponseDto, {
         ...collection,
-        documentsCount: collection.documents?.length || 0,
+        documentsCount: collection.documentsCount,
       }),
     );
 
@@ -86,7 +86,7 @@ export class CollectionsService {
   async findOne(id: string): Promise<CollectionResponseDto> {
     const collection = await this.collectionsRepository.findOne({
       where: { id },
-      relations: ['category', 'documents'],
+      relations: ['category'],
     });
 
     if (!collection) {
@@ -95,7 +95,7 @@ export class CollectionsService {
 
     return plainToClass(CollectionResponseDto, {
       ...collection,
-      documentsCount: collection.documents?.length || 0,
+      documentsCount: collection.documentsCount,
     });
   }
 
@@ -151,14 +151,13 @@ export class CollectionsService {
   async remove(id: string): Promise<void> {
     const collection = await this.collectionsRepository.findOne({
       where: { id },
-      relations: ['documents'],
     });
 
     if (!collection) {
       throw new NotFoundException('Collection not found');
     }
 
-    if (collection.documents && collection.documents.length > 0) {
+    if (collection.documentsCount > 0) {
       throw new ConflictException(
         'Cannot delete collection with existing documents. Delete documents first.',
       );
@@ -192,7 +191,6 @@ export class CollectionsService {
 
     const [collections, total] = await this.collectionsRepository.findAndCount({
       where: { categoryId },
-      relations: ['documents'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -201,7 +199,7 @@ export class CollectionsService {
     const data = collections.map(collection =>
       plainToClass(CollectionResponseDto, {
         ...collection,
-        documentsCount: collection.documents?.length || 0,
+        documentsCount: collection.documentsCount,
       }),
     );
 
@@ -224,14 +222,14 @@ export class CollectionsService {
           isActive: true,
         },
       },
-      relations: ['category', 'documents'],
+      relations: ['category'],
       order: { createdAt: 'DESC' },
     });
 
     return collections.map(collection =>
       plainToClass(CollectionResponseDto, {
         ...collection,
-        documentsCount: collection.documents?.length || 0,
+        documentsCount: collection.documentsCount,
       }),
     );
   }

@@ -31,6 +31,19 @@ export class Collection {
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
 
+  // Statistics fields
+  @Column({ type: 'int', default: 0 })
+  documentsCount: number;
+
+  @Column({ type: 'int', default: 0 })
+  activeDocuments: number;
+
+  @Column({ type: 'boolean', default: false })
+  isEmpty: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  inUse: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

@@ -54,7 +54,7 @@ export class CategoryTable extends BaseComponent {
   renderCategoryRow(category) {
     const isExpanded = this.expandedCategories.has(category.id);
     const collections = this.categoryCollections[category.id] || category.collections || [];
-    const collectionsCount = collections.length;
+    const collectionsCount = category.collectionsCount || collections.length;
 
     return `
       <tr class="category-row ${!category.isActive ? 'inactive' : ''}">

@@ -54,7 +54,7 @@ export class CollectionTable extends BaseComponent {
   renderCollectionRow(collection) {
     const isExpanded = this.expandedCollections.has(collection.id);
     const files = this.collectionFiles[collection.id] || [];
-    const documentsCount = files.length;
+    const documentsCount = collection.documentsCount || files.length;
 
     return `
       <tr class="collection-row ${!collection.isActive ? 'inactive' : ''}">

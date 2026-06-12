@@ -116,7 +116,7 @@ export class DocumentsTab extends BaseComponent {
     return this.state.categories.map(category => {
       const isExpanded = this.state.expandedCategories.has(category.id);
       const collectionsCount = category.collectionsCount || 0;
-      const totalFiles = category.totalDocumentsCount || 0;
+      const totalFiles = category.documentsCount || 0;
 
       let rows = `
         <tr class="category-row" data-category-id="${category.id}">
@@ -132,6 +132,7 @@ export class DocumentsTab extends BaseComponent {
             </div>
           </td>
           <td class="count-cell">${collectionsCount} / ${totalFiles}</td>
+          <td class="count-cell">${category.activeCollections} / ${category.activeDocuments}</td>
           <td class="status-cell">
             <span class="status-badge ${this.getProcessingStatus(category).class}">${this.getProcessingStatus(category).text}</span>
           </td>
@@ -150,7 +151,7 @@ export class DocumentsTab extends BaseComponent {
       if (isExpanded && this.state.categoryCollections[category.id]) {
         rows += `
           <tr class="expanded-row">
-            <td colspan="5" class="expanded-cell">
+            <td colspan="6" class="expanded-cell">
               <div class="nested-table-container">
                 ${this.renderCollectionsTable(category.id)}
               </div>
@@ -177,7 +178,7 @@ export class DocumentsTab extends BaseComponent {
 
     collections.forEach(collection => {
       const isExpanded = this.state.expandedCollections.has(collection.id);
-      const documentsCount = collection.documentsCount || collection.documents?.length || 0;
+      const documentsCount = collection.documentsCount || 0;
 
       // Визначаємо, чи вимкнений switcher через неактивну категорію
       const category = this.state.categories.find(cat => cat.id === categoryId);
@@ -372,8 +373,8 @@ export class DocumentsTab extends BaseComponent {
 
     // Закриваємо колекції без файлів
     for (const collectionId of this.state.expandedCollections) {
-      const files = this.state.collectionFiles[collectionId] || [];
-      if (files.length === 0) {
+      const collection = this.state.collections.find(col => col.id === collectionId);
+      if (!collection || (collection.documentsCount || 0) === 0) {
         expandedCollections.delete(collectionId);
         needsUpdate = true;
       }

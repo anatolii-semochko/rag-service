@@ -16,11 +16,15 @@ import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
 import { CategoryResponseDto } from '../dto/category-response.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { StatisticsHelper } from '../../common/helpers/statistics.helper';
 
 @ApiTags('Categories')
 @Controller('categories')
 export class CategoriesController {
-  constructor(private readonly categoriesService: CategoriesService) {}
+  constructor(
+    private readonly categoriesService: CategoriesService,
+    private readonly statisticsHelper: StatisticsHelper,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new category' })
@@ -34,7 +38,9 @@ export class CategoriesController {
     description: 'Invalid input data',
   })
   async create(@Body() createCategoryDto: CreateCategoryDto): Promise<CategoryResponseDto> {
-    return this.categoriesService.create(createCategoryDto);
+    const result = await this.categoriesService.create(createCategoryDto);
+    await this.statisticsHelper.updateCategoryStatistics(result.id);
+    return result;
   }
 
   @Get()
@@ -88,7 +94,9 @@ export class CategoriesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateCategoryDto: UpdateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.update(id, updateCategoryDto);
+    const result = await this.categoriesService.update(id, updateCategoryDto);
+    await this.statisticsHelper.updateCategoryStatistics(id);
+    return result;
   }
 
   @Patch(':id/toggle-active')
@@ -101,7 +109,9 @@ export class CategoriesController {
   async toggleActive(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.toggleActive(id);
+    const result = await this.categoriesService.toggleActive(id);
+    await this.statisticsHelper.updateCategoryStatistics(id);
+    return result;
   }
 
   @Delete(':id')
@@ -115,7 +125,8 @@ export class CategoriesController {
     description: 'Category not found',
   })
   async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.categoriesService.remove(id);
+    await this.categoriesService.remove(id);
+    // No need to update statistics as category is deleted
   }
 
   @Get(':id/collections')
@@ -140,4 +151,5 @@ export class CategoriesController {
   async getStats(@Param('id', ParseUUIDPipe) id: string) {
     return this.categoriesService.getStats(id);
   }
+
 }

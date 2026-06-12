@@ -22,11 +22,15 @@ import { CreateCollectionDto } from '../dto/create-collection.dto';
 import { UpdateCollectionDto } from '../dto/update-collection.dto';
 import { CollectionResponseDto } from '../dto/collection-response.dto';
 import { PaginationDto, PaginationResponseDto } from '../../common/dto/pagination.dto';
+import { StatisticsHelper } from '../../common/helpers/statistics.helper';
 
 @ApiTags('Collections')
 @Controller('collections')
 export class CollectionsController {
-  constructor(private readonly collectionsService: CollectionsService) {}
+  constructor(
+    private readonly collectionsService: CollectionsService,
+    private readonly statisticsHelper: StatisticsHelper,
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -40,7 +44,10 @@ export class CollectionsController {
   })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   async create(@Body() createCollectionDto: CreateCollectionDto): Promise<CollectionResponseDto> {
-    return this.collectionsService.create(createCollectionDto);
+    const result = await this.collectionsService.create(createCollectionDto);
+    await this.statisticsHelper.updateCollectionStatistics(result.id);
+    await this.statisticsHelper.updateCategoryStatistics(result.categoryId);
+    return result;
   }
 
   @Get()
@@ -107,7 +114,10 @@ export class CollectionsController {
     @Param('id') id: string,
     @Body() updateCollectionDto: UpdateCollectionDto,
   ): Promise<CollectionResponseDto> {
-    return this.collectionsService.update(id, updateCollectionDto);
+    const result = await this.collectionsService.update(id, updateCollectionDto);
+    await this.statisticsHelper.updateCollectionStatistics(id);
+    await this.statisticsHelper.updateCategoryStatistics(result.categoryId);
+    return result;
   }
 
   @Delete(':id')
@@ -120,7 +130,9 @@ export class CollectionsController {
   @ApiResponse({ status: 204, description: 'Collection deleted successfully' })
   @ApiResponse({ status: 404, description: 'Collection not found' })
   async remove(@Param('id') id: string): Promise<void> {
-    return this.collectionsService.remove(id);
+    const collection = await this.collectionsService.findOne(id);
+    await this.collectionsService.remove(id);
+    await this.statisticsHelper.updateCategoryStatistics(collection.categoryId);
   }
 
   @Get(':id/documents')
