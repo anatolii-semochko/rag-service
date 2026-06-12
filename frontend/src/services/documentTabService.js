@@ -5,38 +5,58 @@ export class DocumentTabService {
 
     async fetchData(expandedCategories = new Set(), expandedCollections = new Set()) {
         try {
-            // Fetch all categories
+            // Fetch all categories (categories already include collections from server)
             const categoriesResponse = await categoriesService.getCategories();
             const categories = categoriesResponse.data || [];
 
-            // Fetch collections for expanded categories
+            // Collect all collection IDs from categories and expanded categories
+            const allCollectionIds = new Set();
+
+            // Get collection IDs from categories that come with collections from server
+            categories.forEach(category => {
+                if (category.collections && category.collections.length > 0) {
+                    category.collections.forEach(collection => {
+                        allCollectionIds.add(collection.id);
+                    });
+                }
+            });
+
+            // Fetch collections for expanded categories ONLY if they don't have collections already
             const categoryCollections = {};
             for (const categoryId of expandedCategories) {
-                try {
-                    const collectionsResponse = await collectionsService.getCollectionsByCategory(categoryId);
-                    categoryCollections[categoryId] = collectionsResponse.data || [];
-                } catch (error) {
-                    console.error(`Error fetching collections for category ${categoryId}:`, error);
-                    categoryCollections[categoryId] = [];
+                const category = categories.find(cat => cat.id === categoryId);
+                if (category && category.collections && category.collections.length > 0) {
+                    categoryCollections[categoryId] = category.collections;
+                } else {
+                    try {
+                        const collectionsResponse = await collectionsService.getCollectionsByCategory(categoryId);
+                        const collections = collectionsResponse.data || [];
+                        categoryCollections[categoryId] = collections;
+                        collections.forEach(collection => {
+                            allCollectionIds.add(collection.id);
+                        });
+                    } catch (error) {
+                        categoryCollections[categoryId] = [];
+                    }
                 }
             }
 
-            // Fetch files for expanded collections
-            const collectionFiles = {};
-            for (const collectionId of expandedCollections) {
+            // Fetch ALL documents for ALL collections
+            const collectionDocuments = {};
+
+            for (const collectionId of allCollectionIds) {
                 try {
-                    const filesResponse = await documentsService.getDocumentsByCollection(collectionId);
-                    collectionFiles[collectionId] = filesResponse.data || [];
+                    const documentsResponse = await documentsService.getDocumentsByCollection(collectionId);
+                    collectionDocuments[collectionId] = documentsResponse.data || [];
                 } catch (error) {
-                    console.error(`Error fetching files for collection ${collectionId}:`, error);
-                    collectionFiles[collectionId] = [];
+                    collectionDocuments[collectionId] = [];
                 }
             }
 
             return {
                 categories,
                 categoryCollections,
-                collectionFiles,
+                collectionDocuments,
                 expandedCategories,
                 expandedCollections
             };
@@ -50,7 +70,7 @@ export class DocumentTabService {
     precalculateData(
         categories,
         categoryCollections,
-        collectionFiles,
+        collectionDocuments,
         expandedCategories,
         expandedCollections
     ) {
@@ -64,7 +84,8 @@ export class DocumentTabService {
             };
 
             // Get collections for this category
-            const collections = categoryCollections[category.id] || [];
+            // First try from expanded collections, then fallback to collections included with category data
+            const collections = categoryCollections[category.id] || category.collections || [];
 
             processedCategory.collections = collections.map(collection => {
                 // Add calculated parameters for collection
@@ -75,10 +96,10 @@ export class DocumentTabService {
                     documents: []
                 };
 
-                // Get files for this collection
-                const files = collectionFiles[collection.id] || [];
+                // Get documents for this collection
+                const documents = collectionDocuments[collection.id] || [];
 
-                processedCollection.documents = files.map(file => {
+                processedCollection.documents = documents.map(file => {
                     // Add calculated parameters for document
                     return {
                         ...file,

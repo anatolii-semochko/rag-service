@@ -37,7 +37,7 @@ export class DocumentsTab extends BaseComponent {
       const processedData = this.documentTabService.precalculateData(
         rawData.categories,
         rawData.categoryCollections,
-        rawData.collectionFiles,
+        rawData.collectionDocuments,
         rawData.expandedCategories,
         rawData.expandedCollections
       );
@@ -87,7 +87,7 @@ export class DocumentsTab extends BaseComponent {
     this.setState({ expandedCategories });
 
     // Reload data with new state
-    await this.loadData();
+    // await this.loadData();
   }
 
   async toggleCollectionExpand(collectionId) {
@@ -102,7 +102,7 @@ export class DocumentsTab extends BaseComponent {
     this.setState({ expandedCollections });
 
     // Reload data with new state
-    await this.loadData();
+    // await this.loadData();
   }
 
   // API action methods

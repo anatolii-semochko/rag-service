@@ -19,7 +19,7 @@ export class DocumentTabComponents {
         }
 
         return this.tab.state.processedData.map(category => {
-            const isExpanded = category.isExpanded;
+            const isExpanded = this.tab.state.expandedCategories.has(category.id);
             const collectionsCount = category.collectionsCount || 0;
             const totalFiles = category.documentsCount || 0;
 
@@ -80,9 +80,8 @@ export class DocumentTabComponents {
     `;
 
         collections.forEach(collection => {
-            const isExpanded = collection.isExpanded;
+            const isExpanded = this.tab.state.expandedCollections.has(collection.id);
             const documentsCount = collection.documentsCount || 0;
-
 
             tableHTML += `
         <tr class="collection-row" data-collection-id="${collection.id}">
