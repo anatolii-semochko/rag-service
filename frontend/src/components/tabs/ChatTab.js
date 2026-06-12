@@ -691,6 +691,12 @@ export class ChatTab extends BaseComponent {
     const messagesContainer = this.$('#chatMessages');
     if (!messagesContainer) return;
 
+    // Clear empty state if it exists
+    const emptyState = messagesContainer.querySelector('.chat-empty');
+    if (emptyState) {
+      messagesContainer.innerHTML = '';
+    }
+
     const messageElement = document.createElement('div');
     messageElement.className = `chat-message ${message.role}`;
     messageElement.innerHTML = `
@@ -700,6 +706,9 @@ export class ChatTab extends BaseComponent {
     `;
 
     messagesContainer.appendChild(messageElement);
+
+    // Update session info after adding message
+    this.updateSessionInfo();
   }
 
   updateLoadingState() {
@@ -904,6 +913,10 @@ export class ChatTab extends BaseComponent {
     if (messageInput) {
       this.on(messageInput, 'keydown', this.handleKeydown.bind(this));
     }
+
+    // Update UI elements after render
+    this.updateClearButton();
+    this.updateSessionInfo();
   }
 
   clearChat() {
@@ -919,6 +932,10 @@ export class ChatTab extends BaseComponent {
         if (messagesContainer) {
           messagesContainer.innerHTML = this.renderEmptyState();
         }
+
+        // Update session info and disable clear button
+        this.updateSessionInfo();
+        this.updateClearButton();
       }
     }
   }
@@ -934,6 +951,10 @@ export class ChatTab extends BaseComponent {
     if (messagesContainer) {
       messagesContainer.innerHTML = this.renderEmptyState();
     }
+
+    // Update session info and disable clear button
+    this.updateSessionInfo();
+    this.updateClearButton();
   }
 
   renderEmptyState() {
@@ -947,5 +968,33 @@ export class ChatTab extends BaseComponent {
         </div>
       </div>
     `;
+  }
+
+  updateSessionInfo() {
+    const sessionInfoContainer = this.$('.chat-session-info');
+    if (!sessionInfoContainer) return;
+
+    sessionInfoContainer.innerHTML = `
+      <div><strong>Messages:</strong> ${this.state.messages.length}</div>
+      <div><strong>Session History:</strong> ${this.session.size()} interactions</div>
+      <div><strong>Use RAG:</strong> ${this.state.useRAG}</div>
+      <div><strong>Selected Categories:</strong> ${this.state.selectedCategories.length}</div>
+      <div><strong>Selected Strategies:</strong> ${this.state.strategies.join(', ')}</div>
+      <div><strong>Available Categories:</strong> ${this.state.categories.length}</div>
+      <div><strong>Session ID:</strong> ${this.state.sessionId || 'None'}</div>
+      <div><strong>Session Saved:</strong> ${!this.session.isEmpty() ? 'Yes' : 'No'}</div>
+      ${!this.session.isEmpty() ? '<div class="session-note">💾 Session context available for next requests</div>' : ''}
+    `;
+  }
+
+  updateClearButton() {
+    const clearButton = this.$('.container-header-actions button[onclick="window.app.clearChat()"]');
+    if (clearButton) {
+      if (this.state.messages.length === 0) {
+        clearButton.disabled = true;
+      } else {
+        clearButton.disabled = false;
+      }
+    }
   }
 }
