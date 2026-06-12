@@ -28,6 +28,14 @@ export class Chunk {
   })
   embedding: number[];
 
+  @Column({
+    type: 'tsvector',
+    nullable: true,
+    generatedType: 'STORED',
+    asExpression: "to_tsvector('english', content)",
+  })
+  searchVector: any;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

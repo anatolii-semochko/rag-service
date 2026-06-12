@@ -204,32 +204,19 @@ export class CategoriesService implements OnModuleInit {
   async getStats(id: string) {
     const category = await this.categoryRepository.findOne({
       where: { id },
-      relations: ['collections', 'collections.documents'],
     });
 
     if (!category) {
       throw new NotFoundException('Category not found');
     }
 
-    const totalCollections = category.collections.length;
-    const activeCollections = category.collections.filter(c => c.isActive).length;
-    const totalDocuments = category.collections.reduce(
-      (sum, collection) => sum + collection.documents.length,
-      0,
-    );
-    const activeDocuments = category.collections.reduce(
-      (sum, collection) =>
-        sum + collection.documents.filter(d => d.isActive).length,
-      0,
-    );
-
     return {
       categoryId: id,
       categoryName: category.name,
-      totalCollections,
-      activeCollections,
-      totalDocuments,
-      activeDocuments,
+      totalCollections: category.collectionsCount,
+      activeCollections: category.activeCollections,
+      totalDocuments: category.documentsCount,
+      activeDocuments: category.activeDocuments,
       isActive: category.isActive,
     };
   }

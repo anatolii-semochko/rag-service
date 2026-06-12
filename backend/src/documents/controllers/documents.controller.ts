@@ -26,11 +26,15 @@ import { DocumentsService } from '../services/documents.service';
 import { UploadDocumentDto } from '../dto/upload-document.dto';
 import { DocumentResponseDto } from '../dto/document-response.dto';
 import { PaginationDto, PaginationResponseDto } from '../../common/dto/pagination.dto';
+import { StatisticsHelper } from '../../common/helpers/statistics.helper';
 
 @ApiTags('Documents')
 @Controller('documents')
 export class DocumentsController {
-  constructor(private readonly documentsService: DocumentsService) {}
+  constructor(
+    private readonly documentsService: DocumentsService,
+    private readonly statisticsHelper: StatisticsHelper,
+  ) {}
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
@@ -78,7 +82,9 @@ export class DocumentsController {
     @UploadedFile() file: Express.Multer.File,
     @Body() uploadDto: UploadDocumentDto,
   ): Promise<DocumentResponseDto> {
-    return this.documentsService.upload(file, uploadDto);
+    const result = await this.documentsService.upload(file, uploadDto);
+    await this.statisticsHelper.updateStatisticsAfterDocumentChange(result.collectionId);
+    return result;
   }
 
   @Get('collection/:collectionId')
@@ -169,7 +175,9 @@ export class DocumentsController {
     @Param('id') id: string,
     @Body('isActive') isActive: boolean,
   ): Promise<DocumentResponseDto> {
-    return this.documentsService.toggleActive(id, isActive);
+    const result = await this.documentsService.toggleActive(id, isActive);
+    await this.statisticsHelper.updateStatisticsAfterDocumentChange(result.collectionId);
+    return result;
   }
 
   @Post(':id/reprocess')
@@ -205,6 +213,8 @@ export class DocumentsController {
   @ApiResponse({ status: 204, description: 'Document deleted successfully' })
   @ApiResponse({ status: 404, description: 'Document not found' })
   async remove(@Param('id') id: string): Promise<void> {
-    return this.documentsService.remove(id);
+    const document = await this.documentsService.findOne(id);
+    await this.documentsService.remove(id);
+    await this.statisticsHelper.updateStatisticsAfterDocumentChange(document.collectionId);
   }
 }

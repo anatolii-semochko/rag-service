@@ -25,6 +25,25 @@ export class Category {
   @Column({ type: 'varchar', length: 7, default: '#007bff' })
   color: string; // Hex color for UI
 
+  // Statistics fields
+  @Column({ type: 'int', default: 0 })
+  collectionsCount: number;
+
+  @Column({ type: 'int', default: 0 })
+  documentsCount: number;
+
+  @Column({ type: 'int', default: 0 })
+  activeCollections: number;
+
+  @Column({ type: 'int', default: 0 })
+  activeDocuments: number;
+
+  @Column({ type: 'boolean', default: false })
+  isEmpty: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  inUse: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

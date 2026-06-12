@@ -137,7 +137,16 @@ export class ChatService extends BaseService {
       sessionId: options.sessionId || null,
       collectionIds: options.collectionIds || [],
       context: options.context || '',
-      temperature: options.temperature || 0.7
+      temperature: options.temperature || 0.7,
+      ragMode: options.ragMode || 'all',
+      selectedCategories: options.selectedCategories || [],
+      strategies: options.strategies || ['hybrid'],
+      retrievalMode: options.retrievalMode || 'hybrid', // deprecated but kept for backward compatibility
+      vectorWeight: options.vectorWeight || 0.7,
+      keywordWeight: options.keywordWeight || 0.3,
+      trace: options.trace || false,
+      dryRun: options.dryRun || false,
+      session: options.session || [] // Add session history
     };
 
     return this.client.post('/chat', payload);
